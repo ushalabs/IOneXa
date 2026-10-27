@@ -530,65 +530,12 @@ QWidget* MainWindow::createProjectsView() {
 }
 
 QWidget* MainWindow::createDevicesView() {
-    auto* scroll = new QScrollArea();
-    scroll->setWidgetResizable(true);
-    scroll->setStyleSheet("QScrollArea { border: none; background-color: #16181D; }");
-
-    auto* container = new QWidget();
-    container->setStyleSheet("background-color: #16181D; padding: 24px;");
-    auto* layout = new QVBoxLayout(container);
-    layout->setSpacing(16);
-
-    auto* title = new QLabel("Device Profiles & Emulator Manager", container);
-    title->setStyleSheet("font-size: 18px; font-weight: 700; color: #F2F4F8;");
-    layout->addWidget(title);
-
-    auto* desc = new QLabel(
-        "Select a viewport profile to calibrate the Standalone Mobile Device Emulator (Window B). "
-        "Supports dynamic resolution switching, orientation rotation, and high-DPI scaling.",
-        container
-    );
-    desc->setStyleSheet("color: #A4ADBD; font-size: 13px;");
-    layout->addWidget(desc);
-
-    const auto& profiles = m_viewportManager->profiles();
-    for (int i = 0; i < profiles.size(); ++i) {
-        const auto& prof = profiles[i];
-        auto* card = new QFrame(container);
-        card->setObjectName("cardFrame");
-        card->setStyleSheet(Theme::cardStyle());
-        auto* cardLayout = new QHBoxLayout(card);
-        cardLayout->setContentsMargins(16, 12, 16, 12);
-
-        auto* infoLayout = new QVBoxLayout();
-        auto* nameLabel = new QLabel(QString("%1 (%2 x %3)").arg(prof.name).arg(prof.width).arg(prof.height), card);
-        nameLabel->setStyleSheet("font-size: 14px; font-weight: 600; color: #F2F4F8;");
-        infoLayout->addWidget(nameLabel);
-
-        QString details = QString("Scale: %1x | Dynamic Island: %2 | Type: %3")
-            .arg(prof.scaleFactor)
-            .arg(prof.hasDynamicIsland ? "Yes" : "No")
-            .arg(prof.isMobile ? "Handheld Phone" : "Tablet Viewport");
-        auto* detailLabel = new QLabel(details, card);
-        detailLabel->setStyleSheet("color: #A4ADBD; font-size: 12px;");
-        infoLayout->addWidget(detailLabel);
-
-        cardLayout->addLayout(infoLayout, 1);
-
-        auto* btnSelect = new QPushButton("Select & Launch", card);
-        btnSelect->setStyleSheet(Theme::buttonStyle(i == m_viewportManager->activeProfileIndex()));
-        connect(btnSelect, &QPushButton::clicked, this, [this, i]() {
-            m_viewportManager->selectProfile(i);
-            openEmulatorWindow();
-        });
-        cardLayout->addWidget(btnSelect);
-
-        layout->addWidget(card);
-    }
-
-    layout->addStretch();
-    scroll->setWidget(container);
-    return scroll;
+    auto* panel = new DeviceManagerPanel(m_viewportManager.get());
+    connect(panel, &DeviceManagerPanel::launchRequested, this, [this](const QString& profileId) {
+        m_viewportManager->selectProfileById(profileId);
+        openEmulatorWindow();
+    });
+    return panel;
 }
 
 QWidget* MainWindow::createCompatibilityView() {

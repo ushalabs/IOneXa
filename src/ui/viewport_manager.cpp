@@ -1,4 +1,6 @@
 #include "viewport_manager.hpp"
+#include <QSettings>
+#include <QDateTime>
 
 namespace ionexa::ui {
 
@@ -207,6 +209,113 @@ QString ViewportManager::buildUserAgentJson() const {
         return "{}";
     }
     return QString(R"({"userAgent":"%1"})").arg(prof.userAgent);
+}
+
+bool ViewportManager::addCustomProfile(const DeviceProfile& profile) {
+    if (profile.id.isEmpty() || profile.name.isEmpty()) return false;
+    for (const auto& p : m_profiles) {
+        if (p.id == profile.id) return false;
+    }
+    m_profiles.push_back(profile);
+    emit profileListChanged();
+    return true;
+}
+
+bool ViewportManager::removeProfile(const QString& id) {
+    for (int i = 0; i < m_profiles.size(); ++i) {
+        if (m_profiles[i].id == id) {
+            if (id == "iphone-14" || id == "pixel-7") return false;
+            m_profiles.removeAt(i);
+            if (m_activeIndex >= m_profiles.size()) {
+                m_activeIndex = m_profiles.size() - 1;
+            }
+            emit profileListChanged();
+            emit profileChanged(activeProfile());
+            emit viewportChanged(currentPixelWidth(), currentPixelHeight(), m_isLandscape, m_zoomFactor);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ViewportManager::updateProfile(const DeviceProfile& profile) {
+    for (int i = 0; i < m_profiles.size(); ++i) {
+        if (m_profiles[i].id == profile.id) {
+            m_profiles[i] = profile;
+            emit profileListChanged();
+            if (i == m_activeIndex) {
+                emit profileChanged(activeProfile());
+                emit viewportChanged(currentPixelWidth(), currentPixelHeight(), m_isLandscape, m_zoomFactor);
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ViewportManager::duplicateProfile(const QString& sourceId, const QString& newName) {
+    for (const auto& p : m_profiles) {
+        if (p.id == sourceId) {
+            DeviceProfile dup = p;
+            dup.id = QString("%1-copy-%2").arg(sourceId).arg(QDateTime::currentMSecsSinceEpoch());
+            dup.name = newName.isEmpty() ? QString("%1 (Copy)").arg(p.name) : newName;
+            m_profiles.push_back(dup);
+            emit profileListChanged();
+            return true;
+        }
+    }
+    return false;
+}
+
+void ViewportManager::resetToDefaultProfiles() {
+    initStandardProfiles();
+    m_activeIndex = 0;
+    emit profileListChanged();
+    emit profileChanged(activeProfile());
+    emit viewportChanged(currentPixelWidth(), currentPixelHeight(), m_isLandscape, m_zoomFactor);
+}
+
+void ViewportManager::saveProfiles() {
+    QSettings settings("UshaLabs", "IOneXa");
+    settings.beginWriteArray("custom_profiles");
+    int customIdx = 0;
+    for (const auto& p : m_profiles) {
+        if (p.id.startsWith("custom-") || p.id.contains("-copy-")) {
+            settings.setArrayIndex(customIdx++);
+            settings.setValue("id", p.id);
+            settings.setValue("name", p.name);
+            settings.setValue("width", p.width);
+            settings.setValue("height", p.height);
+            settings.setValue("scaleFactor", p.scaleFactor);
+            settings.setValue("isMobile", p.isMobile);
+            settings.setValue("hasDynamicIsland", p.hasDynamicIsland);
+            settings.setValue("hasNotch", p.hasNotch);
+            settings.setValue("userAgent", p.userAgent);
+        }
+    }
+    settings.endArray();
+}
+
+void ViewportManager::loadProfiles() {
+    QSettings settings("UshaLabs", "IOneXa");
+    int count = settings.beginReadArray("custom_profiles");
+    for (int i = 0; i < count; ++i) {
+        settings.setArrayIndex(i);
+        DeviceProfile p;
+        p.id = settings.value("id").toString();
+        p.name = settings.value("name").toString();
+        p.width = settings.value("width", 390).toInt();
+        p.height = settings.value("height", 844).toInt();
+        p.scaleFactor = settings.value("scaleFactor", 2.0).toDouble();
+        p.isMobile = settings.value("isMobile", true).toBool();
+        p.hasDynamicIsland = settings.value("hasDynamicIsland", false).toBool();
+        p.hasNotch = settings.value("hasNotch", false).toBool();
+        p.userAgent = settings.value("userAgent").toString();
+        if (!p.id.isEmpty() && !p.name.isEmpty()) {
+            addCustomProfile(p);
+        }
+    }
+    settings.endArray();
 }
 
 } // namespace ionexa::ui

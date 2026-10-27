@@ -22,6 +22,7 @@
 #include "developer_console_panel.hpp"
 #include "network_inspector_panel.hpp"
 #include "device_emulator_window.hpp"
+#include "device_manager_panel.hpp"
 #include "engines/network_inspector.hpp"
 
 namespace ionexa::ui {

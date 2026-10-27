@@ -44,6 +44,15 @@ public:
     void setZoomFactor(double zoom);
     void setTouchEmulation(bool enabled);
 
+    // Profile Management (GUI Phase 4)
+    bool addCustomProfile(const DeviceProfile& profile);
+    bool removeProfile(const QString& id);
+    bool updateProfile(const DeviceProfile& profile);
+    bool duplicateProfile(const QString& sourceId, const QString& newName);
+    void resetToDefaultProfiles();
+    void saveProfiles();
+    void loadProfiles();
+
     // Chrome DevTools Protocol emulation helpers
     [[nodiscard]] QString buildDeviceMetricsJson() const;
     [[nodiscard]] QString buildTouchEmulationJson() const;
@@ -54,6 +63,7 @@ signals:
     void viewportChanged(int width, int height, bool isLandscape, double zoom);
     void profileChanged(const DeviceProfile& profile);
     void touchEmulationToggled(bool enabled);
+    void profileListChanged();
 
 private:
     void initStandardProfiles();

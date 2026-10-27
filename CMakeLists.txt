@@ -58,6 +58,8 @@ add_library(ionexa_core STATIC
     src/ui/network_inspector_panel.cpp
     src/ui/device_emulator_window.hpp
     src/ui/device_emulator_window.cpp
+    src/ui/device_manager_panel.hpp
+    src/ui/device_manager_panel.cpp
     src/ui/main_window.hpp
     src/ui/main_window.cpp
 )
@@ -126,6 +128,7 @@ add_executable(ionexa_unit_tests
     tests/unit/test_gui_architecture.hpp
     tests/unit/test_emulator_window.hpp
     tests/unit/test_workbench_views.hpp
+    tests/unit/test_device_manager.hpp
     tests/unit/main.cpp
 )
 
