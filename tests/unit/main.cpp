@@ -26,6 +26,7 @@ void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QS
 #include "test_feature_suite.hpp"
 #include "test_regression_suite.hpp"
 #include "test_hardening_stress.hpp"
+#include "test_handoff_generator.hpp"
 
 int main(int argc, char* argv[]) {
     Q_UNUSED(argc);
@@ -117,10 +118,14 @@ int main(int argc, char* argv[]) {
         TestHardeningStress tc;
         runSuite("TestHardeningStress", tc);
     }
+    {
+        TestHandoffGenerator tc;
+        runSuite("TestHandoffGenerator", tc);
+    }
 
     if (status == 0) {
         std::cout << "\n============================================\n";
-        std::cout << "ALL 18 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
+        std::cout << "ALL 19 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
         std::cout << "============================================\n";
     }
 

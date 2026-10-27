@@ -2,6 +2,10 @@
 #include <QGroupBox>
 #include <QFormLayout>
 #include <QScrollArea>
+#include <QPushButton>
+#include <QFileDialog>
+#include <QFile>
+#include "project/handoff_generator.hpp"
 
 namespace ionexa::ui {
 
@@ -88,6 +92,22 @@ void InspectorPanel::setupUi() {
     formCompat->addRow("Web Score:", m_lblCompatScore);
     formCompat->addRow("Modules:", m_lblCompatBreakdown);
     formCompat->addRow("Platform Files:", m_lblCompatFiles);
+
+    auto* btnHandoff = new QPushButton("Export iOS Handoff Guide", grpCompat);
+    btnHandoff->setStyleSheet("background-color: #0284c7; color: white; border-radius: 4px; padding: 6px; font-weight: 600; font-size: 11px;");
+    connect(btnHandoff, &QPushButton::clicked, this, [this]() {
+        QString md = project::HandoffGenerator::generateMarkdown(m_lastProject, m_lastReport);
+        QString savePath = QFileDialog::getSaveFileName(this, "Save iOS Verification Handoff Guide", "IOS_VERIFICATION_HANDOFF.md", "Markdown (*.md);;All Files (*)");
+        if (!savePath.isEmpty()) {
+            QFile file(savePath);
+            if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                file.write(md.toUtf8());
+                file.close();
+            }
+        }
+    });
+    formCompat->addRow(btnHandoff);
+
     mainLayout->addWidget(grpCompat);
 
     mainLayout->addStretch();
@@ -121,6 +141,7 @@ void InspectorPanel::setupUi() {
 }
 
 void InspectorPanel::updateProject(const project::ProjectDetails& details) {
+    m_lastProject = details;
     if (details.isValid) {
         m_lblProjectName->setText(QString::fromStdString(details.projectName));
         m_lblExpoSdk->setText(QString::fromStdString(details.expoSdkVersion));

@@ -56,6 +56,7 @@ private:
     QLabel* m_lblCompatBreakdown{nullptr};
     QLabel* m_lblCompatFiles{nullptr};
     project::CompatibilityReport m_lastReport;
+    project::ProjectDetails m_lastProject;
 };
 
 } // namespace ionexa::ui
