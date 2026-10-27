@@ -34,6 +34,10 @@ std::string AppSettings::toJson() const {
     root["defaultPort"] = m_defaultPort;
     root["startInLandscape"] = m_startInLandscape;
     root["telemetryOptIn"] = m_telemetryOptIn;
+    root["customViewportWidth"] = m_customViewportWidth;
+    root["customViewportHeight"] = m_customViewportHeight;
+    root["touchEmulationEnabled"] = m_touchEmulationEnabled;
+    root["zoomFactor"] = m_zoomFactor;
 
     QJsonArray recents;
     for (const auto& p : m_recentProjects) {
@@ -64,6 +68,18 @@ bool AppSettings::fromJson(const std::string& jsonString) {
     }
     if (root.contains("telemetryOptIn") && root["telemetryOptIn"].isBool()) {
         m_telemetryOptIn = root["telemetryOptIn"].toBool();
+    }
+    if (root.contains("customViewportWidth") && root["customViewportWidth"].isDouble()) {
+        m_customViewportWidth = root["customViewportWidth"].toInt();
+    }
+    if (root.contains("customViewportHeight") && root["customViewportHeight"].isDouble()) {
+        m_customViewportHeight = root["customViewportHeight"].toInt();
+    }
+    if (root.contains("touchEmulationEnabled") && root["touchEmulationEnabled"].isBool()) {
+        m_touchEmulationEnabled = root["touchEmulationEnabled"].toBool();
+    }
+    if (root.contains("zoomFactor") && root["zoomFactor"].isDouble()) {
+        m_zoomFactor = root["zoomFactor"].toDouble();
     }
     if (root.contains("recentProjects") && root["recentProjects"].isArray()) {
         m_recentProjects.clear();

@@ -4,6 +4,7 @@
 #include <vector>
 #include <functional>
 #include <memory>
+#include <thread>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -43,6 +44,9 @@ private:
     HANDLE m_stdoutRead{nullptr};
     HANDLE m_stderrRead{nullptr};
     DWORD m_pid{0};
+    std::thread m_stdoutThread;
+    std::thread m_stderrThread;
+    std::thread m_exitThread;
 #else
     int m_pid{0};
 #endif

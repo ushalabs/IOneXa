@@ -129,7 +129,7 @@ bool ProcessSupervisor::start(const std::wstring& applicationPath,
     // Read stdout in background thread
     if (onLog && m_stdoutRead) {
         HANDLE hOut = m_stdoutRead;
-        std::thread([hOut, onLog]() {
+        m_stdoutThread = std::thread([hOut, onLog]() {
             char buffer[1024];
             DWORD bytesRead = 0;
             std::string line;
@@ -148,13 +148,13 @@ bool ProcessSupervisor::start(const std::wstring& applicationPath,
             if (!line.empty()) {
                 onLog(line, false);
             }
-        }).detach();
+        });
     }
 
     // Read stderr in background thread
     if (onLog && m_stderrRead) {
         HANDLE hErr = m_stderrRead;
-        std::thread([hErr, onLog]() {
+        m_stderrThread = std::thread([hErr, onLog]() {
             char buffer[1024];
             DWORD bytesRead = 0;
             std::string line;
@@ -173,19 +173,19 @@ bool ProcessSupervisor::start(const std::wstring& applicationPath,
             if (!line.empty()) {
                 onLog(line, true);
             }
-        }).detach();
+        });
     }
 
     // Wait for exit in background thread
     if (onExit && m_processHandle) {
         HANDLE hProc = m_processHandle;
-        std::thread([this, hProc, onExit]() {
+        m_exitThread = std::thread([this, hProc, onExit]() {
             WaitForSingleObject(hProc, INFINITE);
             DWORD exitCode = 0;
             GetExitCodeProcess(hProc, &exitCode);
             m_running = false;
             onExit(static_cast<int>(exitCode));
-        }).detach();
+        });
     }
 
     return true;
@@ -209,6 +209,25 @@ bool ProcessSupervisor::stop(int timeoutMs) {
         }
 
         WaitForSingleObject(m_processHandle, timeoutMs);
+    }
+
+    if (m_stdoutRead) {
+        CloseHandle(m_stdoutRead);
+        m_stdoutRead = nullptr;
+    }
+    if (m_stderrRead) {
+        CloseHandle(m_stderrRead);
+        m_stderrRead = nullptr;
+    }
+
+    if (m_stdoutThread.joinable()) {
+        m_stdoutThread.join();
+    }
+    if (m_stderrThread.joinable()) {
+        m_stderrThread.join();
+    }
+    if (m_exitThread.joinable()) {
+        m_exitThread.join();
     }
 #endif
     m_running = false;

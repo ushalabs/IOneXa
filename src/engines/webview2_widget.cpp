@@ -310,6 +310,29 @@ void WebView2Widget::addScriptToExecuteOnDocumentCreated(const QString& script) 
 #endif
 }
 
+void WebView2Widget::applyDeviceEmulation(int width, int height, double scaleFactor, bool touchEnabled, const QString& userAgent) {
+#ifdef _WIN32
+    if (m_webview) {
+        QString metricsJson = QString(R"({"width":%1,"height":%2,"deviceScaleFactor":%3,"mobile":true})")
+            .arg(width).arg(height).arg(scaleFactor);
+        m_webview->CallDevToolsProtocolMethod(L"Emulation.setDeviceMetricsOverride", metricsJson.toStdWString().c_str(), nullptr);
+
+        QString touchJson = QString(R"({"enabled":%1,"maxTouchPoints":5})")
+            .arg(touchEnabled ? "true" : "false");
+        m_webview->CallDevToolsProtocolMethod(L"Emulation.setTouchEmulationEnabled", touchJson.toStdWString().c_str(), nullptr);
+
+        QString mouseTouchJson = QString(R"({"enabled":%1,"configuration":"mobile"})")
+            .arg(touchEnabled ? "true" : "false");
+        m_webview->CallDevToolsProtocolMethod(L"Emulation.setEmitTouchEventsForMouse", mouseTouchJson.toStdWString().c_str(), nullptr);
+
+        if (!userAgent.isEmpty()) {
+            QString uaJson = QString(R"({"userAgent":"%1"})").arg(userAgent);
+            m_webview->CallDevToolsProtocolMethod(L"Network.setUserAgentOverride", uaJson.toStdWString().c_str(), nullptr);
+        }
+    }
+#endif
+}
+
 bool WebView2Widget::isInitialized() const {
     return m_initialized;
 }

@@ -19,7 +19,8 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , m_stateMachine(std::make_unique<core::SessionStateMachine>())
     , m_metroSupervisor(std::make_unique<process::MetroSupervisor>(this))
-    , m_hmrBridge(std::make_unique<engines::FastRefreshBridge>(this)) {
+    , m_hmrBridge(std::make_unique<engines::FastRefreshBridge>(this))
+    , m_viewportManager(std::make_unique<ViewportManager>(this)) {
     
     m_stateMachine->setOnStateChanged([this](core::SessionState oldState, core::SessionState newState) {
         QMetaObject::invokeMethod(this, [this, oldState, newState]() {
@@ -86,6 +87,37 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_hmrBridge.get(), &engines::FastRefreshBridge::stateChanged, this, [this](engines::BridgeState state) {
         if (m_inspectorPanel && m_hmrBridge) {
             m_inspectorPanel->updateFastRefresh(m_hmrBridge->stats(), state);
+        }
+    });
+
+    // Viewport Manager Signals
+    connect(m_viewportManager.get(), &ViewportManager::viewportChanged, this, [this](int w, int h, bool isLandscape, double zoom) {
+        if (m_deviceViewport) {
+            m_deviceViewport->setFixedSize(w, h);
+        }
+        if (m_inspectorPanel) {
+            m_inspectorPanel->updateViewport(w, h, isLandscape, zoom);
+        }
+        if (m_webView) {
+            m_webView->setZoomFactor(zoom);
+            auto prof = m_viewportManager->activeProfile();
+            m_webView->applyDeviceEmulation(w, h, prof.scaleFactor, m_viewportManager->isTouchEmulationEnabled(), prof.userAgent);
+        }
+        auto prof = m_viewportManager->activeProfile();
+        if (m_dynamicIsland) {
+            m_dynamicIsland->setVisible(prof.hasDynamicIsland && !isLandscape);
+        }
+        if (m_homeIndicator) {
+            m_homeIndicator->setVisible(!isLandscape);
+        }
+    });
+
+    connect(m_viewportManager.get(), &ViewportManager::touchEmulationToggled, this, [this](bool enabled) {
+        if (m_webView) {
+            auto prof = m_viewportManager->activeProfile();
+            int w = m_viewportManager->currentPixelWidth();
+            int h = m_viewportManager->currentPixelHeight();
+            m_webView->applyDeviceEmulation(w, h, prof.scaleFactor, enabled, prof.userAgent);
         }
     });
 
@@ -162,14 +194,22 @@ void MainWindow::setupUi() {
 
     // Device preset selector
     m_deviceCombo = new QComboBox(topHeader);
-    m_deviceCombo->addItem("iPhone 14/15 (390 x 844)");
-    m_deviceCombo->addItem("iPhone 15 Pro Max (430 x 932)");
-    m_deviceCombo->addItem("Pixel 7 (412 x 915)");
-    m_deviceCombo->addItem("iPad Mini (744 x 1133)");
+    for (const auto& prof : m_viewportManager->profiles()) {
+        m_deviceCombo->addItem(QString("%1 (%2 x %3)").arg(prof.name).arg(prof.width).arg(prof.height), prof.id);
+    }
     connect(m_deviceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::onDevicePresetChanged);
 
     m_btnOrientation = new QPushButton("🔄 Rotate", topHeader);
     connect(m_btnOrientation, &QPushButton::clicked, this, &MainWindow::onToggleOrientationClicked);
+
+    // Touch emulation toggle
+    m_btnTouch = new QPushButton("👆 Touch: ON", topHeader);
+    m_btnTouch->setCheckable(true);
+    m_btnTouch->setChecked(true);
+    connect(m_btnTouch, &QPushButton::clicked, this, [this](bool checked) {
+        m_viewportManager->setTouchEmulation(checked);
+        m_btnTouch->setText(checked ? "👆 Touch: ON" : "🖱 Touch: OFF");
+    });
 
     // Zoom selector
     m_zoomCombo = new QComboBox(topHeader);
@@ -185,6 +225,7 @@ void MainWindow::setupUi() {
     headerLayout->addWidget(new QLabel("Device:", topHeader));
     headerLayout->addWidget(m_deviceCombo);
     headerLayout->addWidget(m_btnOrientation);
+    headerLayout->addWidget(m_btnTouch);
     headerLayout->addWidget(new QLabel("Zoom:", topHeader));
     headerLayout->addWidget(m_zoomCombo);
 
@@ -215,20 +256,39 @@ void MainWindow::setupUi() {
     // Device Viewport Frame (simulated mobile border)
     m_deviceViewport = new QFrame(m_canvasContainer);
     m_deviceViewport->setObjectName("deviceFrame");
-    m_deviceViewport->setFixedSize(m_deviceWidth, m_deviceHeight);
+    m_deviceViewport->setFixedSize(m_viewportManager->currentPixelWidth(), m_viewportManager->currentPixelHeight());
 
     auto* viewportInnerLayout = new QVBoxLayout(m_deviceViewport);
-    viewportInnerLayout->setContentsMargins(12, 12, 12, 12);
-    viewportInnerLayout->setSpacing(0);
+    viewportInnerLayout->setContentsMargins(10, 8, 10, 8);
+    viewportInnerLayout->setSpacing(4);
+
+    // Dynamic Island Simulation Pill
+    m_dynamicIsland = new QFrame(m_deviceViewport);
+    m_dynamicIsland->setObjectName("dynamicIsland");
+    m_dynamicIsland->setFixedSize(110, 24);
+    auto* islandLayout = new QHBoxLayout(m_dynamicIsland);
+    islandLayout->setContentsMargins(6, 0, 6, 0);
+    auto* cameraDot = new QLabel(m_dynamicIsland);
+    cameraDot->setFixedSize(8, 8);
+    cameraDot->setStyleSheet("background-color: #0f172a; border-radius: 4px; border: 1px solid #334155;");
+    islandLayout->addStretch();
+    islandLayout->addWidget(cameraDot);
+    viewportInnerLayout->addWidget(m_dynamicIsland, 0, Qt::AlignHCenter);
 
     m_placeholderLabel = new QLabel("No Project Loaded\nClick 'Open Project' to select an Expo directory", m_deviceViewport);
     m_placeholderLabel->setAlignment(Qt::AlignCenter);
     m_placeholderLabel->setObjectName("placeholderLabel");
-    viewportInnerLayout->addWidget(m_placeholderLabel);
+    viewportInnerLayout->addWidget(m_placeholderLabel, 1);
 
     m_webView = new engines::WebView2Widget(m_deviceViewport);
     m_webView->hide();
-    viewportInnerLayout->addWidget(m_webView);
+    viewportInnerLayout->addWidget(m_webView, 1);
+
+    // Home Indicator Simulation Bar
+    m_homeIndicator = new QFrame(m_deviceViewport);
+    m_homeIndicator->setObjectName("homeIndicator");
+    m_homeIndicator->setFixedSize(120, 4);
+    viewportInnerLayout->addWidget(m_homeIndicator, 0, Qt::AlignHCenter);
 
     connect(m_webView, &engines::WebView2Widget::navigationCompleted, this, [this](bool success, int errorCode) {
         if (success) {
@@ -363,8 +423,17 @@ void MainWindow::applyDarkTheme() {
         }
         #deviceFrame {
             background-color: #020617;
-            border: 2px solid #334155;
+            border: 4px solid #334155;
             border-radius: 36px;
+        }
+        #dynamicIsland {
+            background-color: #000000;
+            border-radius: 12px;
+            border: 1px solid #1e293b;
+        }
+        #homeIndicator {
+            background-color: #64748b;
+            border-radius: 2px;
         }
         #placeholderLabel {
             color: #64748b;
@@ -419,14 +488,8 @@ void MainWindow::appendLog(const QString& line, bool isStderr) {
 }
 
 void MainWindow::onZoomChanged(int zoomPercent) {
-    m_currentZoom = zoomPercent / 100.0;
-    if (m_webView) {
-        m_webView->setZoomFactor(m_currentZoom);
-    }
-    if (m_inspectorPanel) {
-        int w = m_isLandscape ? m_deviceHeight : m_deviceWidth;
-        int h = m_isLandscape ? m_deviceWidth : m_deviceHeight;
-        m_inspectorPanel->updateViewport(w, h, m_isLandscape, m_currentZoom);
+    if (m_viewportManager) {
+        m_viewportManager->setZoomFactor(zoomPercent / 100.0);
     }
     appendLog(QString("[Viewport] Zoom level adjusted to %1%").arg(zoomPercent));
 }
@@ -530,33 +593,15 @@ void MainWindow::onMetroReady(const QString& url, int port) {
 }
 
 void MainWindow::onDevicePresetChanged(int index) {
-    switch (index) {
-    case 0: m_deviceWidth = 390; m_deviceHeight = 844; break;
-    case 1: m_deviceWidth = 430; m_deviceHeight = 932; break;
-    case 2: m_deviceWidth = 412; m_deviceHeight = 915; break;
-    case 3: m_deviceWidth = 744; m_deviceHeight = 1133; break;
-    default: m_deviceWidth = 390; m_deviceHeight = 844; break;
+    if (m_viewportManager) {
+        m_viewportManager->selectProfile(index);
     }
-
-    int w = m_isLandscape ? m_deviceHeight : m_deviceWidth;
-    int h = m_isLandscape ? m_deviceWidth : m_deviceHeight;
-    m_deviceViewport->setFixedSize(w, h);
-    if (m_inspectorPanel) {
-        m_inspectorPanel->updateViewport(w, h, m_isLandscape, m_currentZoom);
-    }
-    appendLog(QString("[Viewport] Resized to %1 x %2").arg(w).arg(h));
 }
 
 void MainWindow::onToggleOrientationClicked() {
-    m_isLandscape = !m_isLandscape;
-    int w = m_isLandscape ? m_deviceHeight : m_deviceWidth;
-    int h = m_isLandscape ? m_deviceWidth : m_deviceHeight;
-    m_deviceViewport->setFixedSize(w, h);
-    if (m_inspectorPanel) {
-        m_inspectorPanel->updateViewport(w, h, m_isLandscape, m_currentZoom);
+    if (m_viewportManager) {
+        m_viewportManager->toggleOrientation();
     }
-    appendLog(QString("[Viewport] Orientation toggled: %1 (%2 x %3)")
-              .arg(m_isLandscape ? "Landscape" : "Portrait").arg(w).arg(h));
 }
 
 } // namespace ionexa::ui

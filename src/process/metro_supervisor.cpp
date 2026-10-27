@@ -18,6 +18,7 @@ MetroSupervisor::MetroSupervisor(QObject* parent)
     , m_process(std::make_unique<ProcessSupervisor>()) {}
 
 MetroSupervisor::~MetroSupervisor() {
+    *m_alive = false;
     stop();
 }
 
@@ -40,6 +41,7 @@ bool MetroSupervisor::start(const project::ProjectDetails& project, int preferre
     m_currentProject = project;
     m_activePort = findAvailablePort(preferredPort);
     m_stopRequested.store(false);
+    m_alive = std::make_shared<std::atomic<bool>>(true);
 
     m_status = MetroStatus::Starting;
     emit statusChanged(m_status);
@@ -60,22 +62,26 @@ bool MetroSupervisor::start(const project::ProjectDetails& project, int preferre
         appPath,
         args,
         workingDir,
-        [this](const std::string& line, bool isStderr) {
+        [this, alive = m_alive](const std::string& line, bool isStderr) {
+            if (!*alive) return;
             core::StructuredLogger::instance().log(
                 isStderr ? core::LogLevel::Warning : core::LogLevel::Info,
                 core::LogSource::Metro,
                 line
             );
-            QMetaObject::invokeMethod(this, [this, qline = QString::fromStdString(line), isStderr]() {
+            QMetaObject::invokeMethod(this, [this, alive, qline = QString::fromStdString(line), isStderr]() {
+                if (!*alive) return;
                 emit logOutput(qline, isStderr);
             });
         },
-        [this](int exitCode) {
+        [this, alive = m_alive](int exitCode) {
+            if (!*alive) return;
             core::StructuredLogger::instance().info(
                 core::LogSource::Metro,
                 "Metro process exited with code " + std::to_string(exitCode)
             );
-            QMetaObject::invokeMethod(this, [this, exitCode]() {
+            QMetaObject::invokeMethod(this, [this, alive, exitCode]() {
+                if (!*alive) return;
                 m_status = MetroStatus::Stopped;
                 emit statusChanged(m_status);
                 emit processTerminated(exitCode);
@@ -127,8 +133,9 @@ void MetroSupervisor::monitorReadiness(int port, int timeoutMs) {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
-    if (isReady && !m_stopRequested.load()) {
-        QMetaObject::invokeMethod(this, [this, port]() {
+    if (isReady && !m_stopRequested.load() && *m_alive) {
+        QMetaObject::invokeMethod(this, [this, alive = m_alive, port]() {
+            if (!*alive) return;
             m_status = MetroStatus::Ready;
             emit statusChanged(m_status);
             emit ready(loopbackUrl(), port);
@@ -138,6 +145,7 @@ void MetroSupervisor::monitorReadiness(int port, int timeoutMs) {
 
 bool MetroSupervisor::stop(int timeoutMs) {
     m_stopRequested.store(true);
+    *m_alive = false;
     if (m_monitorThread.joinable()) {
         m_monitorThread.join();
     }

@@ -54,6 +54,7 @@ private:
     MetroStatus m_status{MetroStatus::Idle};
     int m_activePort{0};
     std::atomic<bool> m_stopRequested{false};
+    std::shared_ptr<std::atomic<bool>> m_alive{std::make_shared<std::atomic<bool>>(true)};
     std::thread m_monitorThread;
 };
 

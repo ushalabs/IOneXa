@@ -15,6 +15,7 @@
 #include "engines/fast_refresh_bridge.hpp"
 #include "nav_rail.hpp"
 #include "inspector_panel.hpp"
+#include "viewport_manager.hpp"
 
 namespace ionexa::ui {
 
@@ -47,6 +48,7 @@ private:
     std::unique_ptr<core::SessionStateMachine> m_stateMachine;
     std::unique_ptr<process::MetroSupervisor> m_metroSupervisor;
     std::unique_ptr<engines::FastRefreshBridge> m_hmrBridge;
+    std::unique_ptr<ViewportManager> m_viewportManager;
     project::ProjectDetails m_currentProject;
 
     // UI elements
@@ -60,20 +62,18 @@ private:
     QPushButton* m_btnReload{nullptr};
     QComboBox* m_deviceCombo{nullptr};
     QPushButton* m_btnOrientation{nullptr};
+    QPushButton* m_btnTouch{nullptr};
     QComboBox* m_zoomCombo{nullptr};
     QPushButton* m_btnCopyDiagnostics{nullptr};
     QPushButton* m_btnClearConsole{nullptr};
     QWidget* m_canvasContainer{nullptr};
     QWidget* m_deviceViewport{nullptr};
+    QFrame* m_dynamicIsland{nullptr};
+    QFrame* m_homeIndicator{nullptr};
     engines::WebView2Widget* m_webView{nullptr};
     QLabel* m_placeholderLabel{nullptr};
     QTextEdit* m_consoleOutput{nullptr};
     QProgressBar* m_progressBar{nullptr};
-
-    bool m_isLandscape{false};
-    double m_currentZoom{1.0};
-    int m_deviceWidth{390};
-    int m_deviceHeight{844};
 };
 
 } // namespace ionexa::ui

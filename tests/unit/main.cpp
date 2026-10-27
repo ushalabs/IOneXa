@@ -19,6 +19,7 @@ void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QS
 #include "test_webview2_engine.hpp"
 #include "test_ui_components.hpp"
 #include "test_fast_refresh.hpp"
+#include "test_viewport_presets.hpp"
 
 int main(int argc, char* argv[]) {
     qInstallMessageHandler(myMessageOutput);
@@ -71,10 +72,14 @@ int main(int argc, char* argv[]) {
         TestFastRefresh tc;
         status |= QTest::qExec(&tc, argc, argv);
     }
+    {
+        TestViewportPresets tc;
+        status |= QTest::qExec(&tc, argc, argv);
+    }
 
     if (status == 0) {
         std::cout << "\n============================================\n";
-        std::cout << "ALL 11 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
+        std::cout << "ALL 12 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
         std::cout << "============================================\n";
     }
 
