@@ -11,6 +11,7 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QScreen>
+#include <QShortcut>
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QToolTip>
@@ -41,6 +42,25 @@ DeviceEmulatorWindow::DeviceEmulatorWindow(ViewportManager* viewportManager, QWi
             }
         });
     }
+
+    // Keyboard Shortcuts
+    auto* scReload = new QShortcut(QKeySequence("Ctrl+R"), this);
+    connect(scReload, &QShortcut::activated, this, &DeviceEmulatorWindow::onReloadClicked);
+
+    auto* scScreenshot = new QShortcut(QKeySequence("Ctrl+S"), this);
+    connect(scScreenshot, &QShortcut::activated, this, &DeviceEmulatorWindow::onScreenshotClicked);
+
+    auto* scPin = new QShortcut(QKeySequence("Ctrl+T"), this);
+    connect(scPin, &QShortcut::activated, this, &DeviceEmulatorWindow::onPinToggled);
+
+    auto* scRotate = new QShortcut(QKeySequence("Ctrl+Shift+R"), this);
+    connect(scRotate, &QShortcut::activated, this, &DeviceEmulatorWindow::onRotateClicked);
+
+    auto* scFit = new QShortcut(QKeySequence("Ctrl+0"), this);
+    connect(scFit, &QShortcut::activated, this, &DeviceEmulatorWindow::onFitWindowClicked);
+
+    auto* scActual = new QShortcut(QKeySequence("Ctrl+1"), this);
+    connect(scActual, &QShortcut::activated, this, &DeviceEmulatorWindow::onActualSizeClicked);
 
     onViewportChanged();
 }
@@ -105,6 +125,56 @@ void DeviceEmulatorWindow::setupUi() {
     m_placeholderLabel->setAlignment(Qt::AlignCenter);
     m_placeholderLabel->setStyleSheet("color: #64748B; font-size: 13px; font-weight: 500; line-height: 1.5;");
     m_contentLayout->addWidget(m_placeholderLabel);
+
+    // Native Error Overlay (Handles offline dev server gracefully)
+    m_errorOverlay = new QFrame(m_contentArea);
+    m_errorOverlay->setObjectName("emulatorErrorOverlay");
+    m_errorOverlay->setStyleSheet(
+        "QFrame#emulatorErrorOverlay { background-color: #16181D; border: 1px solid #F06B72; border-radius: 8px; }"
+    );
+    auto* errorLayout = new QVBoxLayout(m_errorOverlay);
+    errorLayout->setContentsMargins(20, 20, 20, 20);
+    errorLayout->setSpacing(10);
+    errorLayout->setAlignment(Qt::AlignCenter);
+
+    auto* errorIcon = new QLabel("⚠️", m_errorOverlay);
+    errorIcon->setAlignment(Qt::AlignCenter);
+    errorIcon->setStyleSheet("font-size: 32px;");
+    errorLayout->addWidget(errorIcon);
+
+    m_errorTitleLabel = new QLabel("Dev Server Offline", m_errorOverlay);
+    m_errorTitleLabel->setAlignment(Qt::AlignCenter);
+    m_errorTitleLabel->setStyleSheet("font-size: 15px; font-weight: 700; color: #F06B72;");
+    errorLayout->addWidget(m_errorTitleLabel);
+
+    m_errorMessageLabel = new QLabel("Unable to connect to the Metro server.", m_errorOverlay);
+    m_errorMessageLabel->setAlignment(Qt::AlignCenter);
+    m_errorMessageLabel->setWordWrap(true);
+    m_errorMessageLabel->setStyleSheet("font-size: 12px; color: #F2F4F8;");
+    errorLayout->addWidget(m_errorMessageLabel);
+
+    m_errorRemediationLabel = new QLabel("Click ▶ Start in the Workbench to start the server.", m_errorOverlay);
+    m_errorRemediationLabel->setAlignment(Qt::AlignCenter);
+    m_errorRemediationLabel->setWordWrap(true);
+    m_errorRemediationLabel->setStyleSheet("font-size: 11px; color: #A4ADBD;");
+    errorLayout->addWidget(m_errorRemediationLabel);
+
+    auto* errorBtnLayout = new QHBoxLayout();
+    errorBtnLayout->setSpacing(10);
+
+    m_btnErrorRetry = new QPushButton("🔄 Retry", m_errorOverlay);
+    m_btnErrorRetry->setStyleSheet(Theme::buttonStyle(true));
+    connect(m_btnErrorRetry, &QPushButton::clicked, this, &DeviceEmulatorWindow::reload);
+    errorBtnLayout->addWidget(m_btnErrorRetry);
+
+    m_btnErrorDismiss = new QPushButton("Dismiss", m_errorOverlay);
+    m_btnErrorDismiss->setStyleSheet(Theme::buttonStyle(false));
+    connect(m_btnErrorDismiss, &QPushButton::clicked, this, &DeviceEmulatorWindow::hideErrorOverlay);
+    errorBtnLayout->addWidget(m_btnErrorDismiss);
+
+    errorLayout->addLayout(errorBtnLayout);
+    m_errorOverlay->hide();
+    m_contentLayout->addWidget(m_errorOverlay);
 
     m_deviceFrameLayout->addWidget(m_contentArea, 1);
 
@@ -278,6 +348,26 @@ void DeviceEmulatorWindow::setWebView(engines::WebView2Widget* webView) {
         if (m_placeholderLabel) {
             m_placeholderLabel->hide();
         }
+
+        connect(m_webView, &engines::WebView2Widget::navigationCompleted, this, [this](bool success, int errorCode) {
+            if (!success) {
+                showErrorOverlay(
+                    "Dev Server Offline",
+                    QString("Unable to connect to Metro dev server (Error code %1).").arg(errorCode),
+                    "Ensure the Metro process is running in the Workbench on port 8081."
+                );
+            } else {
+                hideErrorOverlay();
+            }
+        });
+
+        connect(m_webView, &engines::WebView2Widget::rendererCrashed, this, [this](int reason) {
+            showErrorOverlay(
+                "Renderer Process Crashed",
+                QString("The Edge WebView2 process encountered an error (Code %1).").arg(reason),
+                "Click Retry below to restart the mobile preview."
+            );
+        });
     } else {
         if (m_placeholderLabel) {
             m_placeholderLabel->show();
@@ -295,6 +385,21 @@ void DeviceEmulatorWindow::showPlaceholder(bool show, const QString& text) {
     if (m_webView) {
         m_webView->setVisible(!show);
     }
+}
+
+void DeviceEmulatorWindow::showErrorOverlay(const QString& title, const QString& message, const QString& remediation) {
+    if (m_errorTitleLabel) m_errorTitleLabel->setText(title);
+    if (m_errorMessageLabel) m_errorMessageLabel->setText(message);
+    if (m_errorRemediationLabel) {
+        m_errorRemediationLabel->setText(remediation);
+        m_errorRemediationLabel->setVisible(!remediation.isEmpty());
+    }
+    if (m_errorOverlay) m_errorOverlay->show();
+    if (m_placeholderLabel) m_placeholderLabel->hide();
+}
+
+void DeviceEmulatorWindow::hideErrorOverlay() {
+    if (m_errorOverlay) m_errorOverlay->hide();
 }
 
 void DeviceEmulatorWindow::navigate(const QString& url) {
@@ -448,7 +553,8 @@ void DeviceEmulatorWindow::resizeEvent(QResizeEvent* event) {
 void DeviceEmulatorWindow::closeEvent(QCloseEvent* event) {
     saveSettings();
     emit emulatorClosed();
-    event->accept();
+    hide();
+    event->ignore();
 }
 
 void DeviceEmulatorWindow::onViewportChanged() {

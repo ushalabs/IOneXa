@@ -32,6 +32,7 @@ void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QS
 #include "test_workbench_views.hpp"
 #include "test_device_manager.hpp"
 #include "test_debugging_workspace.hpp"
+#include "test_window_reliability.hpp"
 
 int main(int argc, char* argv[]) {
     Q_UNUSED(argc);
@@ -147,10 +148,14 @@ int main(int argc, char* argv[]) {
         TestDebuggingWorkspace tc;
         runSuite("TestDebuggingWorkspace", tc);
     }
+    {
+        TestWindowReliability tc;
+        runSuite("TestWindowReliability", tc);
+    }
 
     if (status == 0) {
         std::cout << "\n============================================\n";
-        std::cout << "ALL 24 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
+        std::cout << "ALL 25 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
         std::cout << "============================================\n";
     }
 

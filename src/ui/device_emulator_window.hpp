@@ -49,6 +49,8 @@ public:
     void setDocked(bool docked);
     void updateAppearance();
     void showPlaceholder(bool show, const QString& text = QString());
+    void showErrorOverlay(const QString& title, const QString& message, const QString& remediation = QString());
+    void hideErrorOverlay();
     void navigate(const QString& url);
     void reload();
 
@@ -118,6 +120,12 @@ private:
     QWidget* m_contentArea{nullptr};
     QVBoxLayout* m_contentLayout{nullptr};
     QLabel* m_placeholderLabel{nullptr};
+    QFrame* m_errorOverlay{nullptr};
+    QLabel* m_errorTitleLabel{nullptr};
+    QLabel* m_errorMessageLabel{nullptr};
+    QLabel* m_errorRemediationLabel{nullptr};
+    QPushButton* m_btnErrorRetry{nullptr};
+    QPushButton* m_btnErrorDismiss{nullptr};
     QFrame* m_homeIndicator{nullptr};
 
     // Bottom Status & Truth Badge
