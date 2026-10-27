@@ -19,6 +19,12 @@ add_library(ionexa_core STATIC
     src/core/session_state.cpp
     src/core/errors.hpp
     src/core/capability_manifest.hpp
+    src/core/structured_logger.hpp
+    src/core/structured_logger.cpp
+    src/core/task_coordinator.hpp
+    src/core/task_coordinator.cpp
+    src/core/app_settings.hpp
+    src/core/app_settings.cpp
     src/engines/runtime_engine.hpp
     src/process/process_supervisor.hpp
     src/process/process_supervisor.cpp
@@ -66,6 +72,9 @@ add_executable(ionexa_unit_tests
     tests/unit/test_session_state.hpp
     tests/unit/test_errors.hpp
     tests/unit/test_capability_manifest.hpp
+    tests/unit/test_structured_logger.hpp
+    tests/unit/test_task_coordinator.hpp
+    tests/unit/test_app_settings.hpp
     tests/unit/main.cpp
 )
 
