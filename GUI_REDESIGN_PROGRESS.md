@@ -20,9 +20,9 @@ The IOneXa GUI Overhaul separates the graphical interface into two decoupled, pr
 | Phase | Title | Status | Commit SHA | Verification Highlights |
 |---|---|---|---|---|
 | **GUI Phase 1** | Architecture Audit and Modern Design System | **Completed** | `7773e03` | Decoupled window architecture, design tokens (`theme.hpp/cpp`), README banner & branding |
-| **GUI Phase 2** | Standalone Device Emulator Window | **Completed** | *Current* | Native top-level `DeviceEmulatorWindow`, aspect ratio preservation, scaling, window persistence |
-| **GUI Phase 3** | Modern Development Workbench | **In Progress** | *Pending* | Modular workbench, Android Studio–inspired command bar, navigation rail, central views |
-| **GUI Phase 4** | Device Manager and Emulator Controls | Planned | *Pending* | Device Manager panel, custom profiles, adjacent emulator toolbar, screenshots |
+| **GUI Phase 2** | Standalone Device Emulator Window | **Completed** | `85d3615` | Native top-level `DeviceEmulatorWindow`, aspect ratio preservation, scaling, window persistence |
+| **GUI Phase 3** | Modern Development Workbench | **Completed** | *Current* | Modular workbench, Android Studio–inspired command bar, navigation rail, central views |
+| **GUI Phase 4** | Device Manager and Emulator Controls | **In Progress** | *Pending* | Device Manager panel, custom profiles, adjacent emulator toolbar, screenshots |
 | **GUI Phase 5** | Debugging Workspace and Session Inspector | Planned | *Pending* | Collapsible bottom tools dock, optional right-side inspector, honest status segregation |
 | **GUI Phase 6** | UX Polish and Window Reliability | Planned | *Pending* | High-DPI multi-monitor resilience, keyboard shortcuts, error overlays, graceful window lifecycle |
 | **GUI Phase 7** | Regression Testing and GUI Release Candidate | Planned | *Pending* | 19+ unit test suites, new GUI tests, real application acceptance test on `DeskFlow` |

@@ -1,49 +1,51 @@
 #include "nav_rail.hpp"
+#include "theme.hpp"
 
 namespace ionexa::ui {
 
 NavRail::NavRail(QWidget* parent)
     : QWidget(parent) {
-    setFixedWidth(64);
+    setFixedWidth(52);
     setObjectName("navRail");
     setupButtons();
 }
 
 void NavRail::setupButtons() {
     auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(8, 16, 8, 16);
-    layout->setSpacing(12);
+    layout->setContentsMargins(4, 12, 4, 12);
+    layout->setSpacing(8);
+    layout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
 
-    m_btnWorkspace = new QPushButton("📱", this);
-    m_btnWorkspace->setToolTip("Workspace (Live Preview)");
-    m_btnWorkspace->setFixedSize(48, 48);
+    auto createNavBtn = [this](const QString& text, const QString& tooltip) {
+        auto* btn = new QPushButton(text, this);
+        btn->setToolTip(tooltip);
+        btn->setFixedSize(42, 42);
+        btn->setCheckable(true);
+        return btn;
+    };
 
-    m_btnProjects = new QPushButton("📁", this);
-    m_btnProjects->setToolTip("Projects & Recent");
-    m_btnProjects->setFixedSize(48, 48);
+    m_btnHome = createNavBtn("⌂", "Home & Workbench Overview (Alt+1)");
+    m_btnProjects = createNavBtn("📁", "Project Metadata & Web Packages (Alt+2)");
+    m_btnDevices = createNavBtn("📱", "Device Manager & Standalone Emulator (Alt+3)");
+    m_btnConsole = createNavBtn("💻", "Developer Console & Logs (Alt+4)");
+    m_btnNetwork = createNavBtn("🌐", "Network Inspector & Traffic (Alt+5)");
+    m_btnCompatibility = createNavBtn("📊", "Web Compatibility & Native Handoff (Alt+6)");
+    m_btnSettings = createNavBtn("⚙", "Settings & Preferences (Alt+7)");
 
-    m_btnPresets = new QPushButton("📐", this);
-    m_btnPresets->setToolTip("Device Presets");
-    m_btnPresets->setFixedSize(48, 48);
-
-    m_btnDiagnostics = new QPushButton("🔍", this);
-    m_btnDiagnostics->setToolTip("Diagnostics & Logs");
-    m_btnDiagnostics->setFixedSize(48, 48);
-
-    m_btnSettings = new QPushButton("⚙️", this);
-    m_btnSettings->setToolTip("Settings & Preferences");
-    m_btnSettings->setFixedSize(48, 48);
-
-    connect(m_btnWorkspace, &QPushButton::clicked, this, [this]() { setActiveSection(NavSection::Workspace); });
+    connect(m_btnHome, &QPushButton::clicked, this, [this]() { setActiveSection(NavSection::Home); });
     connect(m_btnProjects, &QPushButton::clicked, this, [this]() { setActiveSection(NavSection::Projects); });
-    connect(m_btnPresets, &QPushButton::clicked, this, [this]() { setActiveSection(NavSection::Presets); });
-    connect(m_btnDiagnostics, &QPushButton::clicked, this, [this]() { setActiveSection(NavSection::Diagnostics); });
+    connect(m_btnDevices, &QPushButton::clicked, this, [this]() { setActiveSection(NavSection::Devices); });
+    connect(m_btnConsole, &QPushButton::clicked, this, [this]() { setActiveSection(NavSection::Console); });
+    connect(m_btnNetwork, &QPushButton::clicked, this, [this]() { setActiveSection(NavSection::Network); });
+    connect(m_btnCompatibility, &QPushButton::clicked, this, [this]() { setActiveSection(NavSection::Compatibility); });
     connect(m_btnSettings, &QPushButton::clicked, this, [this]() { setActiveSection(NavSection::Settings); });
 
-    layout->addWidget(m_btnWorkspace);
+    layout->addWidget(m_btnHome);
     layout->addWidget(m_btnProjects);
-    layout->addWidget(m_btnPresets);
-    layout->addWidget(m_btnDiagnostics);
+    layout->addWidget(m_btnDevices);
+    layout->addWidget(m_btnConsole);
+    layout->addWidget(m_btnNetwork);
+    layout->addWidget(m_btnCompatibility);
     layout->addStretch();
     layout->addWidget(m_btnSettings);
 
@@ -63,38 +65,13 @@ NavSection NavRail::activeSection() const {
 }
 
 void NavRail::updateButtonStyles() {
-    auto applyStyle = [](QPushButton* btn, bool active) {
-        if (!btn) return;
-        if (active) {
-            btn->setStyleSheet(
-                "QPushButton {"
-                "  background-color: #0284c7;"
-                "  border: 2px solid #38bdf8;"
-                "  border-radius: 8px;"
-                "  font-size: 20px;"
-                "}"
-            );
-        } else {
-            btn->setStyleSheet(
-                "QPushButton {"
-                "  background-color: #1e293b;"
-                "  border: 1px solid #334155;"
-                "  border-radius: 8px;"
-                "  font-size: 20px;"
-                "}"
-                "QPushButton:hover {"
-                "  background-color: #334155;"
-                "  border-color: #475569;"
-                "}"
-            );
-        }
-    };
-
-    applyStyle(m_btnWorkspace, m_activeSection == NavSection::Workspace);
-    applyStyle(m_btnProjects, m_activeSection == NavSection::Projects);
-    applyStyle(m_btnPresets, m_activeSection == NavSection::Presets);
-    applyStyle(m_btnDiagnostics, m_activeSection == NavSection::Diagnostics);
-    applyStyle(m_btnSettings, m_activeSection == NavSection::Settings);
+    m_btnHome->setChecked(m_activeSection == NavSection::Home);
+    m_btnProjects->setChecked(m_activeSection == NavSection::Projects);
+    m_btnDevices->setChecked(m_activeSection == NavSection::Devices);
+    m_btnConsole->setChecked(m_activeSection == NavSection::Console);
+    m_btnNetwork->setChecked(m_activeSection == NavSection::Network);
+    m_btnCompatibility->setChecked(m_activeSection == NavSection::Compatibility);
+    m_btnSettings->setChecked(m_activeSection == NavSection::Settings);
 }
 
 } // namespace ionexa::ui

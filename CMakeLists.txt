@@ -58,6 +58,8 @@ add_library(ionexa_core STATIC
     src/ui/network_inspector_panel.cpp
     src/ui/device_emulator_window.hpp
     src/ui/device_emulator_window.cpp
+    src/ui/main_window.hpp
+    src/ui/main_window.cpp
 )
 
 target_include_directories(ionexa_core PUBLIC
@@ -77,8 +79,6 @@ target_link_libraries(ionexa_core PUBLIC
 
 # Main Application Executable
 add_executable(ionexa WIN32
-    src/ui/main_window.hpp
-    src/ui/main_window.cpp
     src/app/main.cpp
 )
 
@@ -125,6 +125,7 @@ add_executable(ionexa_unit_tests
     tests/unit/test_handoff_generator.hpp
     tests/unit/test_gui_architecture.hpp
     tests/unit/test_emulator_window.hpp
+    tests/unit/test_workbench_views.hpp
     tests/unit/main.cpp
 )
 

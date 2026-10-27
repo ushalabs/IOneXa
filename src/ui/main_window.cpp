@@ -1,31 +1,39 @@
 #include "main_window.hpp"
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QSplitter>
-#include <QFileDialog>
-#include <QMessageBox>
-#include <QStatusBar>
-#include <QMenuBar>
-#include <QToolBar>
-#include <QFrame>
-#include <QClipboard>
+#include "theme.hpp"
+#include "project/handoff_generator.hpp"
+
 #include <QApplication>
-#include <QShortcut>
-#include <QKeySequence>
+#include <QClipboard>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QFrame>
+#include <QGridLayout>
+#include <QGroupBox>
+#include <QHBoxLayout>
+#include <QHeaderView>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include "project/compatibility_analyzer.hpp"
+#include <QLineEdit>
+#include <QMessageBox>
+#include <QPainter>
+#include <QScrollArea>
+#include <QShortcut>
+#include <QSplitter>
+#include <QStatusBar>
+#include <QTabWidget>
+#include <QVBoxLayout>
 
 namespace ionexa::ui {
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , m_stateMachine(std::make_unique<core::SessionStateMachine>())
-    , m_metroSupervisor(std::make_unique<process::MetroSupervisor>(this))
-    , m_hmrBridge(std::make_unique<engines::FastRefreshBridge>(this))
-    , m_viewportManager(std::make_unique<ViewportManager>(this))
-    , m_networkInspector(std::make_unique<engines::NetworkInspector>(this)) {
-    
+    , m_metroSupervisor(std::make_unique<process::MetroSupervisor>())
+    , m_hmrBridge(std::make_unique<engines::FastRefreshBridge>())
+    , m_viewportManager(std::make_unique<ViewportManager>())
+    , m_networkInspector(std::make_unique<engines::NetworkInspector>()) {
+
+    // Wire Core Engine Signals
     m_stateMachine->setOnStateChanged([this](core::SessionState oldState, core::SessionState newState) {
         QMetaObject::invokeMethod(this, [this, oldState, newState]() {
             updateSessionState(oldState, newState);
@@ -36,6 +44,7 @@ MainWindow::MainWindow(QWidget* parent)
         if (m_inspectorPanel) {
             m_inspectorPanel->updateProcess(m_metroSupervisor->processId(), m_metroSupervisor->activePort(), status);
         }
+        updateHomeDashboard();
     });
 
     connect(m_metroSupervisor.get(), &process::MetroSupervisor::ready, this, &MainWindow::onMetroReady);
@@ -45,6 +54,7 @@ MainWindow::MainWindow(QWidget* parent)
             m_hmrBridge->processMetroLog(line);
         }
     });
+
     connect(m_metroSupervisor.get(), &process::MetroSupervisor::processTerminated, this, [this](int exitCode) {
         appendLog(QString("[Supervisor] Process exited with code %1").arg(exitCode));
         if (m_hmrBridge) {
@@ -53,12 +63,16 @@ MainWindow::MainWindow(QWidget* parent)
         if (m_stateMachine->canTransitionTo(core::SessionState::Stopped)) {
             m_stateMachine->transitionTo(core::SessionState::Stopped);
         }
+        updateHomeDashboard();
     });
 
     // Fast Refresh Bridge Signals
     connect(m_hmrBridge.get(), &engines::FastRefreshBridge::reloadRequested, this, [this](bool hard) {
         if (m_webView) {
             m_webView->reload(hard);
+        }
+        if (m_emulatorWindow) {
+            m_emulatorWindow->reload();
         }
     });
 
@@ -68,70 +82,35 @@ MainWindow::MainWindow(QWidget* parent)
     });
 
     connect(m_hmrBridge.get(), &engines::FastRefreshBridge::bundleError, this, [this](const QString& err) {
-        appendLog(QString("[Bundle Error] %1").arg(err), true);
-        statusBar()->showMessage("Bundle compilation error!", 5000);
-    });
-
-    connect(m_hmrBridge.get(), &engines::FastRefreshBridge::staleSessionDetected, this, [this](const QString& reason) {
-        appendLog(QString("[Live Reload] Stale session: %1").arg(reason), true);
-        statusBar()->showMessage("Dev server offline — Reconnecting...", 5000);
-    });
-
-    connect(m_hmrBridge.get(), &engines::FastRefreshBridge::reconnected, this, [this]() {
-        appendLog("[Live Reload] Metro dev server connection restored. Preview reloaded.");
-        statusBar()->showMessage("Dev server reconnected!", 3000);
+        appendLog(QString("[Fast Refresh] Bundle error: %1").arg(err), true);
     });
 
     connect(m_hmrBridge.get(), &engines::FastRefreshBridge::statsUpdated, this, [this](const engines::FastRefreshStats& stats) {
-        if (m_inspectorPanel && m_hmrBridge) {
+        if (m_inspectorPanel) {
             m_inspectorPanel->updateFastRefresh(stats, m_hmrBridge->state());
-        }
-    });
-
-    connect(m_hmrBridge.get(), &engines::FastRefreshBridge::stateChanged, this, [this](engines::BridgeState state) {
-        if (m_inspectorPanel && m_hmrBridge) {
-            m_inspectorPanel->updateFastRefresh(m_hmrBridge->stats(), state);
         }
     });
 
     // Viewport Manager Signals
     connect(m_viewportManager.get(), &ViewportManager::viewportChanged, this, [this](int w, int h, bool isLandscape, double zoom) {
-        if (m_deviceViewport) {
-            m_deviceViewport->setFixedSize(w, h);
-        }
         if (m_inspectorPanel) {
             m_inspectorPanel->updateViewport(w, h, isLandscape, zoom);
         }
         if (m_webView) {
-            m_webView->setZoomFactor(zoom);
             auto prof = m_viewportManager->activeProfile();
             m_webView->applyDeviceEmulation(w, h, prof.scaleFactor, m_viewportManager->isTouchEmulationEnabled(), prof.userAgent);
         }
-        auto prof = m_viewportManager->activeProfile();
-        if (m_dynamicIsland) {
-            m_dynamicIsland->setVisible(prof.hasDynamicIsland && !isLandscape);
-        }
-        if (m_homeIndicator) {
-            m_homeIndicator->setVisible(!isLandscape);
-        }
+        updateHomeDashboard();
     });
 
-    connect(m_viewportManager.get(), &ViewportManager::touchEmulationToggled, this, [this](bool enabled) {
-        if (m_webView) {
-            auto prof = m_viewportManager->activeProfile();
-            int w = m_viewportManager->currentPixelWidth();
-            int h = m_viewportManager->currentPixelHeight();
-            m_webView->applyDeviceEmulation(w, h, prof.scaleFactor, enabled, prof.userAgent);
-        }
-    });
-
+    // Create Standalone Device Emulator (Window B)
     m_emulatorWindow = new DeviceEmulatorWindow(m_viewportManager.get(), nullptr);
     connect(m_emulatorWindow, &DeviceEmulatorWindow::consoleRequested, this, [this]() {
-        if (m_bottomTabs && m_developerConsole) {
-            m_bottomTabs->setCurrentWidget(m_developerConsole);
-            activateWindow();
-            raise();
+        if (m_navRail) {
+            m_navRail->setActiveSection(NavSection::Console);
         }
+        activateWindow();
+        raise();
     });
     connect(m_emulatorWindow, &DeviceEmulatorWindow::reloadRequested, this, &MainWindow::onReloadClicked);
     connect(m_emulatorWindow, &DeviceEmulatorWindow::dockRequested, this, &MainWindow::dockEmulator);
@@ -141,7 +120,7 @@ MainWindow::MainWindow(QWidget* parent)
     applyDarkTheme();
     updateSessionState(core::SessionState::Idle, core::SessionState::Idle);
 
-    // Keyboard shortcuts
+    // Keyboard Shortcuts
     auto* scOpen = new QShortcut(QKeySequence("Ctrl+O"), this);
     connect(scOpen, &QShortcut::activated, this, &MainWindow::onOpenProjectClicked);
 
@@ -153,6 +132,9 @@ MainWindow::MainWindow(QWidget* parent)
 
     auto* scEmulator = new QShortcut(QKeySequence("Ctrl+Shift+E"), this);
     connect(scEmulator, &QShortcut::activated, this, &MainWindow::openEmulatorWindow);
+
+    auto* scInspector = new QShortcut(QKeySequence("Ctrl+I"), this);
+    connect(scInspector, &QShortcut::activated, this, &MainWindow::toggleInspector);
 }
 
 MainWindow::~MainWindow() {
@@ -165,405 +147,650 @@ MainWindow::~MainWindow() {
 
 void MainWindow::setupUi() {
     setWindowTitle("IOneXa — Mobile Development Workbench (Expo/React Native)");
-    resize(1380, 880);
+    resize(1360, 860);
 
-    // Central widget & root layout (Horizontal: NavRail | Workspace | Inspector)
     auto* centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
 
-    auto* rootLayout = new QHBoxLayout(centralWidget);
+    auto* rootLayout = new QVBoxLayout(centralWidget);
     rootLayout->setContentsMargins(0, 0, 0, 0);
     rootLayout->setSpacing(0);
 
-    // 1. Navigation Rail (Left, 64px)
-    m_navRail = new NavRail(centralWidget);
-    rootLayout->addWidget(m_navRail);
+    // ==========================================
+    // 1. TOP COMMAND BAR (Unified Desktop Header)
+    // ==========================================
+    m_commandBar = new QWidget(centralWidget);
+    m_commandBar->setObjectName("commandBar");
+    m_commandBar->setFixedHeight(46);
+    auto* cmdLayout = new QHBoxLayout(m_commandBar);
+    cmdLayout->setContentsMargins(14, 0, 14, 0);
+    cmdLayout->setSpacing(8);
 
-    // 2. Middle Container (Toolbar + Canvas + Console)
-    auto* middleContainer = new QWidget(centralWidget);
-    auto* middleLayout = new QVBoxLayout(middleContainer);
-    middleLayout->setContentsMargins(0, 0, 0, 0);
-    middleLayout->setSpacing(0);
+    // Brand / Project Monogram Badge
+    auto* brandLabel = new QLabel("<b>IOneXa</b>", m_commandBar);
+    brandLabel->setStyleSheet("color: #4E9CFF; font-size: 13px; font-weight: 700; padding-right: 6px;");
+    cmdLayout->addWidget(brandLabel);
 
-    // Top Header / Toolbar Bar
-    auto* topHeader = new QWidget(middleContainer);
-    topHeader->setObjectName("topHeader");
-    topHeader->setFixedHeight(50);
-    auto* headerLayout = new QHBoxLayout(topHeader);
-    headerLayout->setContentsMargins(16, 0, 16, 0);
-    headerLayout->setSpacing(10);
+    m_projectBadgeLabel = new QLabel("📁 No Project Loaded", m_commandBar);
+    m_projectBadgeLabel->setObjectName("projectBadge");
+    m_projectBadgeLabel->setStyleSheet(
+        "background-color: #262B35; color: #F2F4F8; border: 1px solid #343B48; "
+        "border-radius: 4px; padding: 4px 10px; font-size: 12px; font-weight: 600;"
+    );
+    cmdLayout->addWidget(m_projectBadgeLabel);
 
-    m_btnOpen = new QPushButton("Open Project", topHeader);
+    cmdLayout->addSpacing(8);
+
+    // Execution Controls
+    m_btnOpen = new QPushButton("Open Project", m_commandBar);
     m_btnOpen->setObjectName("btnOpen");
     m_btnOpen->setToolTip("Open Expo project folder (Ctrl+O)");
+    m_btnOpen->setStyleSheet(Theme::buttonStyle(false));
     connect(m_btnOpen, &QPushButton::clicked, this, &MainWindow::onOpenProjectClicked);
+    cmdLayout->addWidget(m_btnOpen);
 
-    m_btnStart = new QPushButton("▶ Start", topHeader);
+    m_btnStart = new QPushButton("▶ Start", m_commandBar);
     m_btnStart->setObjectName("btnStart");
+    m_btnStart->setToolTip("Start Metro dev server");
+    m_btnStart->setStyleSheet(Theme::buttonStyle(true));
     connect(m_btnStart, &QPushButton::clicked, this, &MainWindow::onStartClicked);
+    cmdLayout->addWidget(m_btnStart);
 
-    m_btnStop = new QPushButton("⏹ Stop", topHeader);
+    m_btnStop = new QPushButton("⏹ Stop", m_commandBar);
     m_btnStop->setObjectName("btnStop");
+    m_btnStop->setToolTip("Stop Metro process");
+    m_btnStop->setStyleSheet(Theme::buttonStyle(false, true));
     connect(m_btnStop, &QPushButton::clicked, this, &MainWindow::onStopClicked);
+    cmdLayout->addWidget(m_btnStop);
 
-    m_btnReload = new QPushButton("🔄 Reload", topHeader);
+    m_btnReload = new QPushButton("🔄 Reload", m_commandBar);
     m_btnReload->setObjectName("btnReload");
-    m_btnReload->setToolTip("Reload web view (Ctrl+R)");
+    m_btnReload->setToolTip("Reload Preview (Ctrl+R)");
+    m_btnReload->setStyleSheet(Theme::buttonStyle(false));
     connect(m_btnReload, &QPushButton::clicked, this, &MainWindow::onReloadClicked);
+    cmdLayout->addWidget(m_btnReload);
 
-    m_btnEmulator = new QPushButton("📱 Emulator", topHeader);
+    cmdLayout->addSpacing(8);
+
+    // Standalone Emulator Launcher Button
+    m_btnEmulator = new QPushButton("📱 Launch Emulator", m_commandBar);
     m_btnEmulator->setObjectName("btnEmulator");
-    m_btnEmulator->setToolTip("Open Standalone Mobile Device Emulator Window (Ctrl+Shift+E)");
+    m_btnEmulator->setToolTip("Launch Standalone Mobile Device Emulator Window (Ctrl+Shift+E)");
+    m_btnEmulator->setStyleSheet(
+        "QPushButton { background-color: #262B35; color: #4E9CFF; border: 1px solid #4E9CFF; "
+        "border-radius: 4px; padding: 5px 12px; font-weight: 600; font-size: 12px; }"
+        "QPushButton:hover { background-color: #4E9CFF; color: #FFFFFF; }"
+    );
     connect(m_btnEmulator, &QPushButton::clicked, this, &MainWindow::openEmulatorWindow);
+    cmdLayout->addWidget(m_btnEmulator);
 
-    headerLayout->addWidget(m_btnOpen);
-    headerLayout->addWidget(m_btnStart);
-    headerLayout->addWidget(m_btnStop);
-    headerLayout->addWidget(m_btnReload);
-    headerLayout->addWidget(m_btnEmulator);
-    headerLayout->addSpacing(10);
+    cmdLayout->addStretch();
 
-    // Device preset selector
-    m_deviceCombo = new QComboBox(topHeader);
-    for (const auto& prof : m_viewportManager->profiles()) {
-        m_deviceCombo->addItem(QString("%1 (%2 x %3)").arg(prof.name).arg(prof.width).arg(prof.height), prof.id);
-    }
-    connect(m_deviceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MainWindow::onDevicePresetChanged);
-
-    m_btnOrientation = new QPushButton("🔄 Rotate", topHeader);
-    connect(m_btnOrientation, &QPushButton::clicked, this, &MainWindow::onToggleOrientationClicked);
-
-    // Touch emulation toggle
-    m_btnTouch = new QPushButton("👆 Touch: ON", topHeader);
-    m_btnTouch->setCheckable(true);
-    m_btnTouch->setChecked(true);
-    connect(m_btnTouch, &QPushButton::clicked, this, [this](bool checked) {
-        m_viewportManager->setTouchEmulation(checked);
-        m_btnTouch->setText(checked ? "👆 Touch: ON" : "🖱 Touch: OFF");
-    });
-
-    // Zoom selector
-    m_zoomCombo = new QComboBox(topHeader);
-    m_zoomCombo->addItem("100%", 100);
-    m_zoomCombo->addItem("75%", 75);
-    m_zoomCombo->addItem("125%", 125);
-    m_zoomCombo->addItem("150%", 150);
-    connect(m_zoomCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
-        int zoomPercent = m_zoomCombo->itemData(idx).toInt();
-        onZoomChanged(zoomPercent);
-    });
-
-    headerLayout->addWidget(new QLabel("Device:", topHeader));
-    headerLayout->addWidget(m_deviceCombo);
-    headerLayout->addWidget(m_btnOrientation);
-    headerLayout->addWidget(m_btnTouch);
-    headerLayout->addWidget(new QLabel("Zoom:", topHeader));
-    headerLayout->addWidget(m_zoomCombo);
-
-    headerLayout->addStretch();
-
-    // Persistent Truth-in-Labeling Badge
-    m_truthDisclosureLabel = new QLabel("Expo Web Preview — Not an iOS Runtime", topHeader);
+    // Truth In Engineering Badge
+    m_truthDisclosureLabel = new QLabel("Expo Web Preview — Not an iOS Runtime", m_commandBar);
     m_truthDisclosureLabel->setObjectName("truthDisclosureBadge");
-    headerLayout->addWidget(m_truthDisclosureLabel);
+    m_truthDisclosureLabel->setStyleSheet(
+        "color: #F5B84D; background-color: rgba(245, 184, 77, 0.12); "
+        "border: 1px solid rgba(245, 184, 77, 0.3); border-radius: 4px; padding: 3px 8px; font-size: 11px; font-weight: 600;"
+    );
+    cmdLayout->addWidget(m_truthDisclosureLabel);
 
-    // Status Badge
-    m_statusBadge = new QLabel("Idle", topHeader);
+    // Session Status Pill
+    m_statusBadge = new QLabel("Idle", m_commandBar);
     m_statusBadge->setObjectName("statusBadge");
-    headerLayout->addWidget(m_statusBadge);
+    m_statusBadge->setStyleSheet(Theme::badgeStyle("#262B35", "#A4ADBD"));
+    cmdLayout->addWidget(m_statusBadge);
 
-    middleLayout->addWidget(topHeader);
+    // Inspector Panel Toggle Button
+    m_btnToggleInspector = new QPushButton("📋 Inspector", m_commandBar);
+    m_btnToggleInspector->setToolTip("Toggle Session Inspector Panel (Ctrl+I)");
+    m_btnToggleInspector->setStyleSheet(Theme::buttonStyle(false));
+    connect(m_btnToggleInspector, &QPushButton::clicked, this, &MainWindow::toggleInspector);
+    cmdLayout->addWidget(m_btnToggleInspector);
 
-    // Vertical Splitter for Canvas + Bottom Diagnostics
-    auto* vSplitter = new QSplitter(Qt::Vertical, middleContainer);
-    vSplitter->setContentsMargins(0, 0, 0, 0);
+    rootLayout->addWidget(m_commandBar);
 
-    // Canvas Center Area
-    m_canvasContainer = new QWidget(vSplitter);
-    m_canvasContainer->setObjectName("canvasContainer");
-    auto* canvasLayout = new QVBoxLayout(m_canvasContainer);
-    canvasLayout->setAlignment(Qt::AlignCenter);
+    // ==========================================
+    // 2. MAIN WORKSPACE BODY
+    // ==========================================
+    auto* bodyContainer = new QWidget(centralWidget);
+    auto* bodyLayout = new QHBoxLayout(bodyContainer);
+    bodyLayout->setContentsMargins(0, 0, 0, 0);
+    bodyLayout->setSpacing(0);
 
-    // Device Viewport Frame (simulated mobile border)
-    m_deviceViewport = new QFrame(m_canvasContainer);
-    m_deviceViewport->setObjectName("deviceFrame");
-    m_deviceViewport->setFixedSize(m_viewportManager->currentPixelWidth(), m_viewportManager->currentPixelHeight());
+    // Left Navigation Rail (52px)
+    m_navRail = new NavRail(bodyContainer);
+    connect(m_navRail, &NavRail::sectionSelected, this, &MainWindow::onNavSectionSelected);
+    bodyLayout->addWidget(m_navRail);
 
-    auto* viewportInnerLayout = new QVBoxLayout(m_deviceViewport);
-    viewportInnerLayout->setContentsMargins(10, 8, 10, 8);
-    viewportInnerLayout->setSpacing(4);
+    // Main Central Stack (7 Modular Views)
+    m_centralStack = new QStackedWidget(bodyContainer);
+    m_centralStack->setObjectName("centralStack");
 
-    // Dynamic Island Simulation Pill
-    m_dynamicIsland = new QFrame(m_deviceViewport);
-    m_dynamicIsland->setObjectName("dynamicIsland");
-    m_dynamicIsland->setFixedSize(110, 24);
-    auto* islandLayout = new QHBoxLayout(m_dynamicIsland);
-    islandLayout->setContentsMargins(6, 0, 6, 0);
-    auto* cameraDot = new QLabel(m_dynamicIsland);
-    cameraDot->setFixedSize(8, 8);
-    cameraDot->setStyleSheet("background-color: #0f172a; border-radius: 4px; border: 1px solid #334155;");
-    islandLayout->addStretch();
-    islandLayout->addWidget(cameraDot);
-    viewportInnerLayout->addWidget(m_dynamicIsland, 0, Qt::AlignHCenter);
+    // Page 0: Home / Welcome Overview
+    m_centralStack->addWidget(createHomeView());
+    // Page 1: Projects / Metadata
+    m_centralStack->addWidget(createProjectsView());
+    // Page 2: Devices / Presets Catalog
+    m_centralStack->addWidget(createDevicesView());
 
-    m_placeholderLabel = new QLabel("No Project Loaded\nClick 'Open Project' to select an Expo directory", m_deviceViewport);
-    m_placeholderLabel->setAlignment(Qt::AlignCenter);
-    m_placeholderLabel->setObjectName("placeholderLabel");
-    viewportInnerLayout->addWidget(m_placeholderLabel, 1);
+    // Page 3: Full Developer Console
+    m_developerConsole = new DeveloperConsolePanel(m_centralStack);
+    m_centralStack->addWidget(m_developerConsole);
 
-    m_webView = new engines::WebView2Widget(m_deviceViewport);
-    m_webView->hide();
-    viewportInnerLayout->addWidget(m_webView, 1);
+    // Page 4: Full Network Inspector
+    m_networkPanel = new NetworkInspectorPanel(m_networkInspector.get(), m_centralStack);
+    m_centralStack->addWidget(m_networkPanel);
 
-    // Home Indicator Simulation Bar
-    m_homeIndicator = new QFrame(m_deviceViewport);
-    m_homeIndicator->setObjectName("homeIndicator");
-    m_homeIndicator->setFixedSize(120, 4);
-    viewportInnerLayout->addWidget(m_homeIndicator, 0, Qt::AlignHCenter);
+    // Page 5: Compatibility Analysis
+    m_centralStack->addWidget(createCompatibilityView());
+    // Page 6: Settings & Preferences
+    m_centralStack->addWidget(createSettingsView());
 
-    connect(m_webView, &engines::WebView2Widget::navigationCompleted, this, [this](bool success, int errorCode) {
-        if (success) {
-            appendLog("[Renderer] Navigation completed successfully.");
-        } else {
-            appendLog(QString("[Renderer] Navigation failed with error status: %1").arg(errorCode), true);
-        }
-    });
+    bodyLayout->addWidget(m_centralStack, 1);
 
-    connect(m_webView, &engines::WebView2Widget::rendererCrashed, this, [this](int reason) {
-        appendLog(QString("[Renderer] CRITICAL: WebView2 renderer process crashed (reason=%1)").arg(reason), true);
-    });
+    // Right-Side Collapsible Session Inspector
+    m_inspectorPanel = new InspectorPanel(bodyContainer);
+    m_inspectorPanel->setFixedWidth(300);
+    bodyLayout->addWidget(m_inspectorPanel);
 
-    connect(m_webView, &engines::WebView2Widget::webMessageReceived, this, [this](const QString& msg) {
-        if (m_hmrBridge) {
-            m_hmrBridge->processWebMessage(msg);
-        }
+    rootLayout->addWidget(bodyContainer, 1);
+}
 
-        // Forward browser console logs and uncaught errors to developer console
-        QJsonDocument doc = QJsonDocument::fromJson(msg.toUtf8());
-        if (doc.isObject()) {
-            QJsonObject obj = doc.object();
-            QString type = obj.value("type").toString();
-            if (type == "console_log") {
-                QString levelStr = obj.value("level").toString();
-                QString logMsg = obj.value("message").toString();
-                ConsoleLogLevel lvl = ConsoleLogLevel::Info;
-                if (levelStr == "error") lvl = ConsoleLogLevel::Error;
-                else if (levelStr == "warning") lvl = ConsoleLogLevel::Warning;
-                else if (levelStr == "debug") lvl = ConsoleLogLevel::Debug;
-                if (m_developerConsole) {
-                    m_developerConsole->appendLog(lvl, ConsoleLogSource::Browser, logMsg);
-                }
-            } else if (type == "runtime_error") {
-                QString errMsg = obj.value("message").toString();
-                QString file = obj.value("filename").toString();
-                int line = obj.value("lineno").toInt();
-                if (m_developerConsole) {
-                    m_developerConsole->appendLog(ConsoleLogLevel::Error, ConsoleLogSource::Browser,
-                        QString("Uncaught Exception: %1 (%2:%3)").arg(errMsg).arg(file).arg(line));
-                }
-            } else if (type == "network_start" && m_networkInspector) {
-                QString reqId = obj.value("reqId").toString();
-                QString url = obj.value("url").toString();
-                QString method = obj.value("method").toString();
-                QMap<QString, QString> headers;
-                if (obj.contains("headers") && obj["headers"].isObject()) {
-                    QJsonObject hObj = obj["headers"].toObject();
-                    for (auto it = hObj.begin(); it != hObj.end(); ++it) {
-                        headers[it.key()] = it.value().toString();
-                    }
-                }
-                auto resType = engines::NetworkInspector::deduceResourceType(url);
-                qint64 id = m_networkInspector->recordRequestStart(url, method, resType, headers);
-                m_pendingNetworkRequests[reqId] = id;
-            } else if (type == "network_response" && m_networkInspector) {
-                QString reqId = obj.value("reqId").toString();
-                qint64 id = m_pendingNetworkRequests.take(reqId);
-                int status = obj.value("status").toInt();
-                QString statusText = obj.value("statusText").toString();
-                qint64 duration = obj.value("durationMs").toInteger();
-                QMap<QString, QString> headers;
-                if (obj.contains("headers") && obj["headers"].isObject()) {
-                    QJsonObject hObj = obj["headers"].toObject();
-                    for (auto it = hObj.begin(); it != hObj.end(); ++it) {
-                        headers[it.key()] = it.value().toString();
-                    }
-                }
-                m_networkInspector->recordResponse(id, status, statusText, duration, 0, headers);
-            } else if (type == "network_error" && m_networkInspector) {
-                QString reqId = obj.value("reqId").toString();
-                qint64 id = m_pendingNetworkRequests.take(reqId);
-                qint64 duration = obj.value("durationMs").toInteger();
-                QString err = obj.value("error").toString();
-                m_networkInspector->recordFailure(id, err, duration);
+QWidget* MainWindow::createHomeView() {
+    auto* scroll = new QScrollArea();
+    scroll->setWidgetResizable(true);
+    scroll->setStyleSheet("QScrollArea { border: none; background-color: #16181D; }");
+
+    auto* container = new QWidget();
+    container->setStyleSheet("background-color: #16181D;");
+    auto* layout = new QVBoxLayout(container);
+    layout->setContentsMargins(24, 24, 24, 24);
+    layout->setSpacing(20);
+
+    // Hero Header
+    auto* heroCard = new QFrame(container);
+    heroCard->setObjectName("cardFrame");
+    heroCard->setStyleSheet(Theme::cardStyle());
+    auto* heroLayout = new QVBoxLayout(heroCard);
+    heroLayout->setContentsMargins(20, 16, 20, 16);
+    heroLayout->setSpacing(8);
+
+    auto* welcomeTitle = new QLabel("Welcome to IOneXa Workbench", heroCard);
+    welcomeTitle->setStyleSheet("font-size: 18px; font-weight: 700; color: #F2F4F8;");
+    heroLayout->addWidget(welcomeTitle);
+
+    auto* welcomeDesc = new QLabel(
+        "Windows-native mobile application testing workbench for Expo and React Native applications. "
+        "Separated into a development workbench and an independent top-level device emulator window.",
+        heroCard
+    );
+    welcomeDesc->setWordWrap(true);
+    welcomeDesc->setStyleSheet("font-size: 13px; color: #A4ADBD; line-height: 1.4;");
+    heroLayout->addWidget(welcomeDesc);
+
+    layout->addWidget(heroCard);
+
+    // 2-Column Cards Grid: Standalone Emulator Card & Metro Status Card
+    auto* gridLayout = new QHBoxLayout();
+    gridLayout->setSpacing(16);
+
+    // Card A: Standalone Device Emulator
+    auto* emulatorCard = new QFrame(container);
+    emulatorCard->setObjectName("cardFrame");
+    emulatorCard->setStyleSheet(Theme::cardStyle());
+    auto* emuLayout = new QVBoxLayout(emulatorCard);
+    emuLayout->setContentsMargins(20, 16, 20, 16);
+    emuLayout->setSpacing(12);
+
+    auto* emuTitle = new QLabel("📱 Standalone Device Emulator", emulatorCard);
+    emuTitle->setStyleSheet("font-size: 15px; font-weight: 600; color: #4E9CFF;");
+    emuLayout->addWidget(emuTitle);
+
+    auto* emuDesc = new QLabel(
+        "Runs the mobile application preview in an independent, resizable Windows window with "
+        "calibrated phone bezels, Dynamic Island, and adjacent hardware controls.",
+        emulatorCard
+    );
+    emuDesc->setWordWrap(true);
+    emuDesc->setStyleSheet("font-size: 12px; color: #A4ADBD;");
+    emuLayout->addWidget(emuDesc);
+
+    m_homeEmulatorProfile = new QLabel("Device: iPhone 14 / 15 (390 x 844)", emulatorCard);
+    m_homeEmulatorProfile->setStyleSheet("font-weight: 600; color: #F2F4F8; font-size: 12px;");
+    emuLayout->addWidget(m_homeEmulatorProfile);
+
+    m_homeEmulatorMode = new QLabel("Mode: Floating (Independent Desktop Window)", emulatorCard);
+    m_homeEmulatorMode->setStyleSheet("color: #43C990; font-size: 12px; font-weight: 500;");
+    emuLayout->addWidget(m_homeEmulatorMode);
+
+    auto* emuBtnLayout = new QHBoxLayout();
+    m_homeBtnLaunchEmulator = new QPushButton("📱 Open Emulator Window", emulatorCard);
+    m_homeBtnLaunchEmulator->setStyleSheet(Theme::buttonStyle(true));
+    connect(m_homeBtnLaunchEmulator, &QPushButton::clicked, this, &MainWindow::openEmulatorWindow);
+    emuBtnLayout->addWidget(m_homeBtnLaunchEmulator);
+
+    m_homeBtnDockToggle = new QPushButton("⇲ Dock / Undock", emulatorCard);
+    m_homeBtnDockToggle->setStyleSheet(Theme::buttonStyle(false));
+    connect(m_homeBtnDockToggle, &QPushButton::clicked, this, [this]() {
+        if (m_emulatorWindow) {
+            if (m_emulatorWindow->isDocked()) {
+                undockEmulator();
+            } else {
+                dockEmulator();
             }
         }
     });
+    emuBtnLayout->addWidget(m_homeBtnDockToggle);
 
-    connect(m_webView, &engines::WebView2Widget::resourceRequested, this, [this](const QString& url, const QString& method) {
-        if (m_networkInspector) {
-            auto type = engines::NetworkInspector::deduceResourceType(url);
-            qint64 id = m_networkInspector->recordRequestStart(url, method, type);
-            m_networkInspector->recordResponse(id, 200, "OK", 8, 1024);
+    emuLayout->addLayout(emuBtnLayout);
+    gridLayout->addWidget(emulatorCard, 1);
+
+    // Card B: Project & Metro Status
+    auto* projectCard = new QFrame(container);
+    projectCard->setObjectName("cardFrame");
+    projectCard->setStyleSheet(Theme::cardStyle());
+    auto* projLayout = new QVBoxLayout(projectCard);
+    projLayout->setContentsMargins(20, 16, 20, 16);
+    projLayout->setSpacing(12);
+
+    auto* projTitle = new QLabel("⚡ Metro Process & Session", projectCard);
+    projTitle->setStyleSheet("font-size: 15px; font-weight: 600; color: #43C990;");
+    projLayout->addWidget(projTitle);
+
+    m_homeProjectTitle = new QLabel("Project: None Loaded", projectCard);
+    m_homeProjectTitle->setStyleSheet("font-weight: 600; color: #F2F4F8; font-size: 12px;");
+    projLayout->addWidget(m_homeProjectTitle);
+
+    m_homeProjectPath = new QLabel("Path: -", projectCard);
+    m_homeProjectPath->setStyleSheet("color: #A4ADBD; font-size: 11px;");
+    m_homeProjectPath->setWordWrap(true);
+    projLayout->addWidget(m_homeProjectPath);
+
+    m_homeProjectSdk = new QLabel("Expo SDK: -", projectCard);
+    m_homeProjectSdk->setStyleSheet("color: #A4ADBD; font-size: 11px;");
+    projLayout->addWidget(m_homeProjectSdk);
+
+    m_homeMetroStatus = new QLabel("Metro Dev Server: Stopped", projectCard);
+    m_homeMetroStatus->setStyleSheet("color: #F06B72; font-size: 12px; font-weight: 500;");
+    projLayout->addWidget(m_homeMetroStatus);
+
+    m_homeMetroUrl = new QLabel("Endpoint: Not running", projectCard);
+    m_homeMetroUrl->setStyleSheet("color: #6B7688; font-size: 11px; font-family: monospace;");
+    projLayout->addWidget(m_homeMetroUrl);
+
+    auto* projBtnLayout = new QHBoxLayout();
+    auto* btnQuickOpen = new QPushButton("Open Project...", projectCard);
+    btnQuickOpen->setStyleSheet(Theme::buttonStyle(false));
+    connect(btnQuickOpen, &QPushButton::clicked, this, &MainWindow::onOpenProjectClicked);
+    projBtnLayout->addWidget(btnQuickOpen);
+
+    auto* btnQuickStart = new QPushButton("▶ Start", projectCard);
+    btnQuickStart->setStyleSheet(Theme::buttonStyle(true));
+    connect(btnQuickStart, &QPushButton::clicked, this, &MainWindow::onStartClicked);
+    projBtnLayout->addWidget(btnQuickStart);
+
+    projLayout->addLayout(projBtnLayout);
+    gridLayout->addWidget(projectCard, 1);
+
+    layout->addLayout(gridLayout);
+
+    // Collapsible Bottom Dock (Diagnostics / Quick Output)
+    auto* bottomDock = new QFrame(container);
+    bottomDock->setObjectName("cardFrame");
+    bottomDock->setStyleSheet(Theme::cardStyle());
+    auto* dockLayout = new QVBoxLayout(bottomDock);
+    dockLayout->setContentsMargins(16, 12, 16, 12);
+
+    auto* dockHeaderLayout = new QHBoxLayout();
+    auto* dockTitle = new QLabel("💻 Diagnostics & Console Summary", bottomDock);
+    dockTitle->setStyleSheet("font-weight: 600; color: #F2F4F8; font-size: 13px;");
+    dockHeaderLayout->addWidget(dockTitle);
+
+    dockHeaderLayout->addStretch();
+
+    auto* btnViewFullConsole = new QPushButton("View Full Console →", bottomDock);
+    btnViewFullConsole->setStyleSheet(Theme::buttonStyle(false));
+    connect(btnViewFullConsole, &QPushButton::clicked, this, [this]() {
+        if (m_navRail) m_navRail->setActiveSection(NavSection::Console);
+    });
+    dockHeaderLayout->addWidget(btnViewFullConsole);
+    dockLayout->addLayout(dockHeaderLayout);
+
+    auto* dockHint = new QLabel(
+        "Real-time Metro process orchestration, Fast Refresh events, uncaught exceptions, "
+        "and browser console logs are aggregated here.",
+        bottomDock
+    );
+    dockHint->setStyleSheet("color: #A4ADBD; font-size: 12px;");
+    dockLayout->addWidget(dockHint);
+
+    layout->addWidget(bottomDock);
+    layout->addStretch();
+
+    scroll->setWidget(container);
+    return scroll;
+}
+
+QWidget* MainWindow::createProjectsView() {
+    auto* container = new QWidget();
+    container->setStyleSheet("background-color: #16181D; padding: 24px;");
+    auto* layout = new QVBoxLayout(container);
+    layout->setSpacing(16);
+
+    auto* title = new QLabel("Project Metadata & Web Readiness", container);
+    title->setStyleSheet("font-size: 18px; font-weight: 700; color: #F2F4F8;");
+    layout->addWidget(title);
+
+    auto* card = new QFrame(container);
+    card->setObjectName("cardFrame");
+    card->setStyleSheet(Theme::cardStyle());
+    auto* cardLayout = new QVBoxLayout(card);
+    cardLayout->setContentsMargins(20, 16, 20, 16);
+    cardLayout->setSpacing(10);
+
+    m_projName = new QLabel("Project Name: (None)", card);
+    m_projName->setStyleSheet("font-size: 14px; font-weight: 600; color: #F2F4F8;");
+    cardLayout->addWidget(m_projName);
+
+    m_projPath = new QLabel("Root Directory: (None)", card);
+    m_projPath->setStyleSheet("color: #A4ADBD; font-size: 12px;");
+    cardLayout->addWidget(m_projPath);
+
+    m_projSdk = new QLabel("Expo SDK Version: -", card);
+    m_projSdk->setStyleSheet("color: #A4ADBD; font-size: 12px;");
+    cardLayout->addWidget(m_projSdk);
+
+    m_projEntry = new QLabel("Application Entry Point: -", card);
+    m_projEntry->setStyleSheet("color: #A4ADBD; font-size: 12px;");
+    cardLayout->addWidget(m_projEntry);
+
+    m_projPkgManager = new QLabel("Detected Package Manager: -", card);
+    m_projPkgManager->setStyleSheet("color: #A4ADBD; font-size: 12px;");
+    cardLayout->addWidget(m_projPkgManager);
+
+    m_projWebSupport = new QLabel("Web Support Packages: Not Verified", card);
+    m_projWebSupport->setStyleSheet("color: #F5B84D; font-size: 12px; font-weight: 600;");
+    cardLayout->addWidget(m_projWebSupport);
+
+    m_btnRemediateWeb = new QPushButton("Copy Web Remediation Command", card);
+    m_btnRemediateWeb->setStyleSheet(Theme::buttonStyle(false));
+    m_btnRemediateWeb->setVisible(false);
+    connect(m_btnRemediateWeb, &QPushButton::clicked, this, [this]() {
+        if (!m_currentProject.remediationCommand.empty()) {
+            QApplication::clipboard()->setText(QString::fromStdString(m_currentProject.remediationCommand));
+            statusBar()->showMessage("Remediation command copied to clipboard!", 3000);
         }
     });
+    cardLayout->addWidget(m_btnRemediateWeb);
 
-    canvasLayout->addWidget(m_deviceViewport);
-    vSplitter->addWidget(m_canvasContainer);
+    layout->addWidget(card);
+    layout->addStretch();
+    return container;
+}
 
-    // Bottom Tabbed Diagnostics Panel: Console & Network Inspector
-    m_bottomTabs = new QTabWidget(vSplitter);
-    m_bottomTabs->setObjectName("bottomTabs");
-    m_bottomTabs->setStyleSheet(R"(
-        #bottomTabs::pane {
-            border: 1px solid #1e293b;
-            background-color: #020617;
+QWidget* MainWindow::createDevicesView() {
+    auto* scroll = new QScrollArea();
+    scroll->setWidgetResizable(true);
+    scroll->setStyleSheet("QScrollArea { border: none; background-color: #16181D; }");
+
+    auto* container = new QWidget();
+    container->setStyleSheet("background-color: #16181D; padding: 24px;");
+    auto* layout = new QVBoxLayout(container);
+    layout->setSpacing(16);
+
+    auto* title = new QLabel("Device Profiles & Emulator Manager", container);
+    title->setStyleSheet("font-size: 18px; font-weight: 700; color: #F2F4F8;");
+    layout->addWidget(title);
+
+    auto* desc = new QLabel(
+        "Select a viewport profile to calibrate the Standalone Mobile Device Emulator (Window B). "
+        "Supports dynamic resolution switching, orientation rotation, and high-DPI scaling.",
+        container
+    );
+    desc->setStyleSheet("color: #A4ADBD; font-size: 13px;");
+    layout->addWidget(desc);
+
+    const auto& profiles = m_viewportManager->profiles();
+    for (int i = 0; i < profiles.size(); ++i) {
+        const auto& prof = profiles[i];
+        auto* card = new QFrame(container);
+        card->setObjectName("cardFrame");
+        card->setStyleSheet(Theme::cardStyle());
+        auto* cardLayout = new QHBoxLayout(card);
+        cardLayout->setContentsMargins(16, 12, 16, 12);
+
+        auto* infoLayout = new QVBoxLayout();
+        auto* nameLabel = new QLabel(QString("%1 (%2 x %3)").arg(prof.name).arg(prof.width).arg(prof.height), card);
+        nameLabel->setStyleSheet("font-size: 14px; font-weight: 600; color: #F2F4F8;");
+        infoLayout->addWidget(nameLabel);
+
+        QString details = QString("Scale: %1x | Dynamic Island: %2 | Type: %3")
+            .arg(prof.scaleFactor)
+            .arg(prof.hasDynamicIsland ? "Yes" : "No")
+            .arg(prof.isMobile ? "Handheld Phone" : "Tablet Viewport");
+        auto* detailLabel = new QLabel(details, card);
+        detailLabel->setStyleSheet("color: #A4ADBD; font-size: 12px;");
+        infoLayout->addWidget(detailLabel);
+
+        cardLayout->addLayout(infoLayout, 1);
+
+        auto* btnSelect = new QPushButton("Select & Launch", card);
+        btnSelect->setStyleSheet(Theme::buttonStyle(i == m_viewportManager->activeProfileIndex()));
+        connect(btnSelect, &QPushButton::clicked, this, [this, i]() {
+            m_viewportManager->selectProfile(i);
+            openEmulatorWindow();
+        });
+        cardLayout->addWidget(btnSelect);
+
+        layout->addWidget(card);
+    }
+
+    layout->addStretch();
+    scroll->setWidget(container);
+    return scroll;
+}
+
+QWidget* MainWindow::createCompatibilityView() {
+    auto* container = new QWidget();
+    container->setStyleSheet("background-color: #16181D; padding: 24px;");
+    auto* layout = new QVBoxLayout(container);
+    layout->setSpacing(16);
+
+    auto* title = new QLabel("Web Compatibility Analysis & Native iOS Handoff", container);
+    title->setStyleSheet("font-size: 18px; font-weight: 700; color: #F2F4F8;");
+    layout->addWidget(title);
+
+    auto* card = new QFrame(container);
+    card->setObjectName("cardFrame");
+    card->setStyleSheet(Theme::cardStyle());
+    auto* cardLayout = new QVBoxLayout(card);
+    cardLayout->setContentsMargins(20, 16, 20, 16);
+    cardLayout->setSpacing(12);
+
+    m_compatScoreLabel = new QLabel("Web Compatibility Score: 100% (Full Web Readiness)", card);
+    m_compatScoreLabel->setStyleSheet("font-size: 14px; font-weight: 600; color: #43C990;");
+    cardLayout->addWidget(m_compatScoreLabel);
+
+    m_compatScoreBar = new QProgressBar(card);
+    m_compatScoreBar->setRange(0, 100);
+    m_compatScoreBar->setValue(100);
+    m_compatScoreBar->setStyleSheet(
+        "QProgressBar { background-color: #1E222A; border: 1px solid #343B48; border-radius: 4px; height: 16px; text-align: center; color: #FFFFFF; font-weight: 600; font-size: 11px; }"
+        "QProgressBar::chunk { background-color: #43C990; border-radius: 3px; }"
+    );
+    cardLayout->addWidget(m_compatScoreBar);
+
+    m_compatDetailsText = new QTextEdit(card);
+    m_compatDetailsText->setReadOnly(true);
+    m_compatDetailsText->setStyleSheet(
+        "background-color: #1E222A; border: 1px solid #343B48; color: #F2F4F8; "
+        "border-radius: 4px; font-family: monospace; font-size: 12px; padding: 8px;"
+    );
+    m_compatDetailsText->setPlainText("No project analyzed yet. Open an Expo project to run compatibility analysis.");
+    m_compatDetailsText->setFixedHeight(180);
+    cardLayout->addWidget(m_compatDetailsText);
+
+    m_btnExportHandoff = new QPushButton("📱 Export Physical iPhone & Xcode Testing Guide (Markdown)", card);
+    m_btnExportHandoff->setStyleSheet(Theme::buttonStyle(true));
+    connect(m_btnExportHandoff, &QPushButton::clicked, this, [this]() {
+        if (!m_currentProject.isValid) {
+            QMessageBox::information(this, "Handoff", "Please open an Expo project first.");
+            return;
         }
-        QTabBar::tab {
-            background-color: #0f172a;
-            color: #94a3b8;
-            font-size: 11px;
-            font-weight: 600;
-            padding: 6px 14px;
-            border-top-left-radius: 4px;
-            border-top-right-radius: 4px;
-            margin-right: 2px;
+        auto guide = project::HandoffGenerator::generateMarkdown(m_currentProject, m_lastCompatReport);
+        QString outPath = QString::fromStdString(m_currentProject.canonicalPath) + "/TESTING_ON_PHYSICAL_IPHONE.md";
+        QFile file(outPath);
+        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            file.write(guide.toUtf8());
+            file.close();
+            QMessageBox::information(this, "Handoff Guide Exported", QString("Guide successfully generated at:\n%1").arg(outPath));
+            appendLog(QString("[Handoff] Exported physical testing guide: %1").arg(outPath));
         }
-        QTabBar::tab:selected {
-            background-color: #1e293b;
-            color: #38bdf8;
-            border-bottom: 2px solid #38bdf8;
-        }
-    )");
+    });
+    cardLayout->addWidget(m_btnExportHandoff);
 
-    m_developerConsole = new DeveloperConsolePanel(m_bottomTabs);
-    m_networkPanel = new NetworkInspectorPanel(m_networkInspector.get(), m_bottomTabs);
+    layout->addWidget(card);
+    layout->addStretch();
+    return container;
+}
 
-    m_bottomTabs->addTab(m_developerConsole, "Console & Diagnostics");
-    m_bottomTabs->addTab(m_networkPanel, "Network Inspector");
+QWidget* MainWindow::createSettingsView() {
+    auto* container = new QWidget();
+    container->setStyleSheet("background-color: #16181D; padding: 24px;");
+    auto* layout = new QVBoxLayout(container);
+    layout->setSpacing(16);
 
-    vSplitter->addWidget(m_bottomTabs);
-    vSplitter->setSizes({550, 250});
+    auto* title = new QLabel("Settings & Preferences", container);
+    title->setStyleSheet("font-size: 18px; font-weight: 700; color: #F2F4F8;");
+    layout->addWidget(title);
 
-    middleLayout->addWidget(vSplitter);
-    rootLayout->addWidget(middleContainer, 1);
+    auto* card = new QFrame(container);
+    card->setObjectName("cardFrame");
+    card->setStyleSheet(Theme::cardStyle());
+    auto* cardLayout = new QVBoxLayout(card);
+    cardLayout->setContentsMargins(20, 16, 20, 16);
+    cardLayout->setSpacing(12);
 
-    // 3. Right Inspector Panel (280px)
-    m_inspectorPanel = new InspectorPanel(centralWidget);
-    rootLayout->addWidget(m_inspectorPanel);
+    auto* portLabel = new QLabel("Default Metro Server Port: <b>8081</b>", card);
+    portLabel->setStyleSheet("color: #F2F4F8; font-size: 13px;");
+    cardLayout->addWidget(portLabel);
 
-    statusBar()->showMessage("IOneXa Ready — Visual Studio 2022 / Qt 6.8 / Edge WebView2");
+    auto* hostLabel = new QLabel("Loopback Boundary: <b>127.0.0.1</b> (Localhost only)", card);
+    hostLabel->setStyleSheet("color: #F2F4F8; font-size: 13px;");
+    cardLayout->addWidget(hostLabel);
+
+    auto* themeLabel = new QLabel("Theme Mode: <b>Dark Mode (Default)</b>", card);
+    themeLabel->setStyleSheet("color: #F2F4F8; font-size: 13px;");
+    cardLayout->addWidget(themeLabel);
+
+    auto* truthLabel = new QLabel(
+        "Truth in Engineering Invariant:\n"
+        "IOneXa operates via Expo Web Preview inside Edge WebView2 with Chrome DevTools Protocol emulation. "
+        "It does not claim to run native iOS binary code.",
+        card
+    );
+    truthLabel->setStyleSheet("color: #F5B84D; font-size: 12px; line-height: 1.4;");
+    truthLabel->setWordWrap(true);
+    cardLayout->addWidget(truthLabel);
+
+    layout->addWidget(card);
+    layout->addStretch();
+    return container;
 }
 
 void MainWindow::applyDarkTheme() {
-    setStyleSheet(R"(
-        QMainWindow {
-            background-color: #0b0f19;
+    setStyleSheet(Theme::workbenchStyle());
+}
+
+void MainWindow::onNavSectionSelected(NavSection section) {
+    int idx = static_cast<int>(section);
+    if (m_centralStack && idx >= 0 && idx < m_centralStack->count()) {
+        m_centralStack->setCurrentIndex(idx);
+    }
+}
+
+void MainWindow::toggleInspector() {
+    if (m_inspectorPanel) {
+        bool visible = !m_inspectorPanel->isVisible();
+        m_inspectorPanel->setVisible(visible);
+        m_btnToggleInspector->setText(visible ? "📋 Inspector" : "📋 Show Inspector");
+    }
+}
+
+void MainWindow::updateHomeDashboard() {
+    if (m_homeProjectTitle) {
+        if (m_currentProject.isValid) {
+            m_homeProjectTitle->setText(QString("Project: <b>%1</b>").arg(QString::fromStdString(m_currentProject.projectName)));
+            m_homeProjectPath->setText(QString("Path: %1").arg(QString::fromStdString(m_currentProject.canonicalPath)));
+            m_homeProjectSdk->setText(QString("Expo SDK: %1 (Manager: %2)").arg(
+                QString::fromStdString(m_currentProject.expoSdkVersion),
+                QString::fromStdString(m_currentProject.packageManager)
+            ));
+        } else {
+            m_homeProjectTitle->setText("Project: None Loaded");
+            m_homeProjectPath->setText("Path: -");
+            m_homeProjectSdk->setText("Expo SDK: -");
         }
-        #topHeader {
-            background-color: #0f172a;
-            border-bottom: 1px solid #1e293b;
+    }
+
+    if (m_homeMetroStatus && m_metroSupervisor) {
+        auto status = m_metroSupervisor->status();
+        if (status == process::MetroStatus::Ready) {
+            m_homeMetroStatus->setText(QString("Metro Dev Server: Ready (Port %1)").arg(m_metroSupervisor->activePort()));
+            m_homeMetroStatus->setStyleSheet("color: #43C990; font-size: 12px; font-weight: 600;");
+            m_homeMetroUrl->setText(QString("http://127.0.0.1:%1").arg(m_metroSupervisor->activePort()));
+        } else if (status == process::MetroStatus::Starting) {
+            m_homeMetroStatus->setText("Metro Dev Server: Starting...");
+            m_homeMetroStatus->setStyleSheet("color: #F5B84D; font-size: 12px; font-weight: 600;");
+        } else {
+            m_homeMetroStatus->setText("Metro Dev Server: Stopped");
+            m_homeMetroStatus->setStyleSheet("color: #F06B72; font-size: 12px; font-weight: 500;");
+            m_homeMetroUrl->setText("Endpoint: Not running");
         }
-        QPushButton {
-            background-color: #1e293b;
-            color: #f8fafc;
-            border: 1px solid #334155;
-            border-radius: 6px;
-            padding: 6px 14px;
-            font-size: 13px;
-            font-weight: 500;
+    }
+
+    if (m_homeEmulatorProfile && m_viewportManager) {
+        auto prof = m_viewportManager->activeProfile();
+        m_homeEmulatorProfile->setText(QString("Device: %1 (%2 x %3)").arg(prof.name).arg(prof.width).arg(prof.height));
+    }
+}
+
+void MainWindow::updateProjectsView() {
+    if (!m_projName) return;
+    if (m_currentProject.isValid) {
+        m_projName->setText(QString("Project Name: %1").arg(QString::fromStdString(m_currentProject.projectName)));
+        m_projPath->setText(QString("Root Directory: %1").arg(QString::fromStdString(m_currentProject.canonicalPath)));
+        m_projSdk->setText(QString("Expo SDK Version: %1").arg(QString::fromStdString(m_currentProject.expoSdkVersion)));
+        m_projEntry->setText(QString("Application Entry Point: %1").arg(QString::fromStdString(m_currentProject.entryPoint)));
+        m_projPkgManager->setText(QString("Detected Package Manager: %1").arg(QString::fromStdString(m_currentProject.packageManager)));
+        
+        if (m_currentProject.hasWebSupport) {
+            m_projWebSupport->setText("Web Support Packages: INSTALLED (react-native-web, react-dom, @expo/metro-runtime)");
+            m_projWebSupport->setStyleSheet("color: #43C990; font-size: 12px; font-weight: 600;");
+            m_btnRemediateWeb->setVisible(false);
+        } else {
+            m_projWebSupport->setText("Web Support Packages: MISSING WEB PACKAGES");
+            m_projWebSupport->setStyleSheet("color: #F06B72; font-size: 12px; font-weight: 600;");
+            m_btnRemediateWeb->setVisible(true);
         }
-        QPushButton:hover {
-            background-color: #334155;
-            border-color: #475569;
-        }
-        QPushButton:pressed {
-            background-color: #0f172a;
-        }
-        #btnStart {
-            background-color: #0284c7;
-            border-color: #0369a1;
-        }
-        #btnStart:hover {
-            background-color: #0369a1;
-        }
-        #btnStop {
-            background-color: #b91c1c;
-            border-color: #991b1b;
-        }
-        #btnStop:hover {
-            background-color: #991b1b;
-        }
-        QComboBox {
-            background-color: #1e293b;
-            color: #f8fafc;
-            border: 1px solid #334155;
-            border-radius: 6px;
-            padding: 4px 10px;
-        }
-        #truthDisclosureBadge {
-            background-color: #451a03;
-            color: #fde047;
-            border: 1px solid #854d0e;
-            border-radius: 6px;
-            padding: 4px 10px;
-            font-weight: 600;
-            font-size: 11px;
-        }
-        #statusBadge {
-            background-color: #1e293b;
-            color: #38bdf8;
-            border: 1px solid #334155;
-            border-radius: 6px;
-            padding: 4px 12px;
-            font-weight: 600;
-            font-size: 12px;
-        }
-        #canvasContainer {
-            background-color: #030712;
-        }
-        #deviceFrame {
-            background-color: #020617;
-            border: 4px solid #334155;
-            border-radius: 36px;
-        }
-        #dynamicIsland {
-            background-color: #000000;
-            border-radius: 12px;
-            border: 1px solid #1e293b;
-        }
-        #homeIndicator {
-            background-color: #64748b;
-            border-radius: 2px;
-        }
-        #placeholderLabel {
-            color: #64748b;
-            font-size: 14px;
-            font-weight: 500;
-        }
-        #consoleContainer {
-            background-color: #090d16;
-            border-top: 1px solid #1e293b;
-        }
-        #consoleHeader {
-            color: #94a3b8;
-            font-weight: 600;
-            font-size: 12px;
-            text-transform: uppercase;
-        }
-        #consoleOutput {
-            background-color: #020617;
-            color: #e2e8f0;
-            border: 1px solid #1e293b;
-            border-radius: 6px;
-            font-family: 'Cascadia Code', 'Consolas', monospace;
-            font-size: 12px;
-        }
-        QStatusBar {
-            background-color: #0f172a;
-            color: #94a3b8;
-            border-top: 1px solid #1e293b;
-        }
-    )");
+    }
+}
+
+void MainWindow::updateCompatibilityView() {
+    if (!m_compatScoreLabel) return;
+    m_compatScoreLabel->setText(QString("Web Compatibility Score: %1% (%2)")
+        .arg(m_lastCompatReport.compatibilityScore, 0, 'f', 1)
+        .arg(m_lastCompatReport.tierSummary())
+    );
+    m_compatScoreBar->setValue(static_cast<int>(std::round(m_lastCompatReport.compatibilityScore)));
+
+    QString details;
+    details += QString("Scan Summary: %1 files inspected\n\n").arg(m_lastCompatReport.fileAnalysis.totalSourceFiles);
+    for (const auto& rec : m_lastCompatReport.recommendations) {
+        details += QString("• %1\n").arg(rec);
+    }
+    m_compatDetailsText->setPlainText(details);
 }
 
 void MainWindow::updateSessionState(core::SessionState oldState, core::SessionState newState) {
@@ -577,6 +804,7 @@ void MainWindow::updateSessionState(core::SessionState oldState, core::SessionSt
     m_btnReload->setEnabled(newState == core::SessionState::Running);
 
     appendLog(QString("[Session] Transitioned to %1").arg(stateStr));
+    updateHomeDashboard();
 }
 
 void MainWindow::appendLog(const QString& line, bool isStderr) {
@@ -634,6 +862,9 @@ void MainWindow::onOpenProjectClicked() {
             return;
         }
 
+        m_projectBadgeLabel->setText(QString("📁 %1").arg(QString::fromStdString(m_currentProject.projectName)));
+        m_projectBadgeLabel->setToolTip(QString("Root: %1").arg(QString::fromStdString(m_currentProject.canonicalPath)));
+
         appendLog(QString("[Project] Loaded '%1' (Expo SDK: %2, Manager: %3)")
                   .arg(QString::fromStdString(m_currentProject.projectName))
                   .arg(QString::fromStdString(m_currentProject.expoSdkVersion))
@@ -644,17 +875,13 @@ void MainWindow::onOpenProjectClicked() {
                       .arg(QString::fromStdString(m_currentProject.remediationCommand)), true);
         }
 
-        auto compatReport = project::CompatibilityAnalyzer::analyze(dir);
+        m_lastCompatReport = project::CompatibilityAnalyzer::analyze(dir);
         if (m_inspectorPanel) {
-            m_inspectorPanel->updateCompatibility(compatReport);
+            m_inspectorPanel->updateCompatibility(m_lastCompatReport);
         }
-        appendLog(QString("[Compatibility] Web Score: %1% (%2)")
-            .arg(compatReport.compatibilityScore, 0, 'f', 1)
-            .arg(compatReport.tierSummary()));
-        for (const auto& rec : compatReport.recommendations) {
-            bool isWarning = rec.contains("requires native") || rec.contains("Ensure web fallback");
-            appendLog(QString("[Compatibility Advisory] %1").arg(rec), isWarning);
-        }
+        updateCompatibilityView();
+        updateProjectsView();
+        updateHomeDashboard();
 
         m_stateMachine->transitionTo(core::SessionState::Ready);
     }
@@ -717,6 +944,19 @@ void MainWindow::onMetroReady(const QString& url, int port) {
     if (m_stateMachine->canTransitionTo(core::SessionState::Running)) {
         m_stateMachine->transitionTo(core::SessionState::Running);
     }
+    updateHomeDashboard();
+}
+
+void MainWindow::onDevicePresetChanged(int index) {
+    if (m_viewportManager) {
+        m_viewportManager->selectProfile(index);
+    }
+}
+
+void MainWindow::onToggleOrientationClicked() {
+    if (m_viewportManager) {
+        m_viewportManager->toggleOrientation();
+    }
 }
 
 void MainWindow::openEmulatorWindow() {
@@ -732,34 +972,18 @@ void MainWindow::dockEmulator() {
     if (!m_emulatorWindow) return;
     m_emulatorWindow->hide();
     m_emulatorWindow->setDocked(true);
-    if (m_deviceViewport) {
-        m_deviceViewport->show();
-    }
     appendLog("[Layout] Device emulator docked into Workbench.");
+    updateHomeDashboard();
 }
 
 void MainWindow::undockEmulator() {
     if (!m_emulatorWindow) return;
-    if (m_deviceViewport) {
-        m_deviceViewport->hide();
-    }
     m_emulatorWindow->setDocked(false);
     m_emulatorWindow->show();
     m_emulatorWindow->raise();
     m_emulatorWindow->activateWindow();
     appendLog("[Layout] Device emulator running in standalone window.");
-}
-
-void MainWindow::onDevicePresetChanged(int index) {
-    if (m_viewportManager) {
-        m_viewportManager->selectProfile(index);
-    }
-}
-
-void MainWindow::onToggleOrientationClicked() {
-    if (m_viewportManager) {
-        m_viewportManager->toggleOrientation();
-    }
+    updateHomeDashboard();
 }
 
 } // namespace ionexa::ui

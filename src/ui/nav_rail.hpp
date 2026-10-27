@@ -8,11 +8,16 @@
 namespace ionexa::ui {
 
 enum class NavSection {
-    Workspace,
-    Projects,
-    Presets,
-    Diagnostics,
-    Settings
+    Workspace = 0,
+    Home = 0,
+    Projects = 1,
+    Presets = 2,
+    Devices = 2,
+    Diagnostics = 3,
+    Console = 3,
+    Network = 4,
+    Compatibility = 5,
+    Settings = 6
 };
 
 class NavRail : public QWidget {
@@ -32,10 +37,12 @@ private:
     void updateButtonStyles();
 
     NavSection m_activeSection{NavSection::Workspace};
-    QPushButton* m_btnWorkspace{nullptr};
+    QPushButton* m_btnHome{nullptr};
     QPushButton* m_btnProjects{nullptr};
-    QPushButton* m_btnPresets{nullptr};
-    QPushButton* m_btnDiagnostics{nullptr};
+    QPushButton* m_btnDevices{nullptr};
+    QPushButton* m_btnConsole{nullptr};
+    QPushButton* m_btnNetwork{nullptr};
+    QPushButton* m_btnCompatibility{nullptr};
     QPushButton* m_btnSettings{nullptr};
 };
 
