@@ -129,6 +129,7 @@ add_executable(ionexa_unit_tests
     tests/unit/test_emulator_window.hpp
     tests/unit/test_workbench_views.hpp
     tests/unit/test_device_manager.hpp
+    tests/unit/test_debugging_workspace.hpp
     tests/unit/main.cpp
 )
 
