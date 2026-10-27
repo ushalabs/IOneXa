@@ -16,6 +16,7 @@
 #include "nav_rail.hpp"
 #include "inspector_panel.hpp"
 #include "viewport_manager.hpp"
+#include "developer_console_panel.hpp"
 
 namespace ionexa::ui {
 
@@ -72,7 +73,7 @@ private:
     QFrame* m_homeIndicator{nullptr};
     engines::WebView2Widget* m_webView{nullptr};
     QLabel* m_placeholderLabel{nullptr};
-    QTextEdit* m_consoleOutput{nullptr};
+    DeveloperConsolePanel* m_developerConsole{nullptr};
     QProgressBar* m_progressBar{nullptr};
 };
 

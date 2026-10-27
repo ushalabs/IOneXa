@@ -12,6 +12,8 @@
 #include <QApplication>
 #include <QShortcut>
 #include <QKeySequence>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 namespace ionexa::ui {
 
@@ -306,43 +308,41 @@ void MainWindow::setupUi() {
         if (m_hmrBridge) {
             m_hmrBridge->processWebMessage(msg);
         }
+
+        // Forward browser console logs and uncaught errors to developer console
+        QJsonDocument doc = QJsonDocument::fromJson(msg.toUtf8());
+        if (doc.isObject()) {
+            QJsonObject obj = doc.object();
+            QString type = obj.value("type").toString();
+            if (type == "console_log") {
+                QString levelStr = obj.value("level").toString();
+                QString logMsg = obj.value("message").toString();
+                ConsoleLogLevel lvl = ConsoleLogLevel::Info;
+                if (levelStr == "error") lvl = ConsoleLogLevel::Error;
+                else if (levelStr == "warning") lvl = ConsoleLogLevel::Warning;
+                else if (levelStr == "debug") lvl = ConsoleLogLevel::Debug;
+                if (m_developerConsole) {
+                    m_developerConsole->appendLog(lvl, ConsoleLogSource::Browser, logMsg);
+                }
+            } else if (type == "runtime_error") {
+                QString errMsg = obj.value("message").toString();
+                QString file = obj.value("filename").toString();
+                int line = obj.value("lineno").toInt();
+                if (m_developerConsole) {
+                    m_developerConsole->appendLog(ConsoleLogLevel::Error, ConsoleLogSource::Browser,
+                        QString("Uncaught Exception: %1 (%2:%3)").arg(errMsg).arg(file).arg(line));
+                }
+            }
+        }
     });
 
     canvasLayout->addWidget(m_deviceViewport);
     vSplitter->addWidget(m_canvasContainer);
 
-    // Bottom Console Panel
-    auto* consoleContainer = new QWidget(vSplitter);
-    consoleContainer->setObjectName("consoleContainer");
-    auto* consoleLayout = new QVBoxLayout(consoleContainer);
-    consoleLayout->setContentsMargins(12, 6, 12, 6);
-
-    auto* consoleTopBar = new QHBoxLayout();
-    auto* consoleHeader = new QLabel("TERMINAL & RUNTIME DIAGNOSTICS", consoleContainer);
-    consoleHeader->setObjectName("consoleHeader");
-
-    m_btnCopyDiagnostics = new QPushButton("Copy Diagnostics", consoleContainer);
-    m_btnCopyDiagnostics->setFixedHeight(26);
-    connect(m_btnCopyDiagnostics, &QPushButton::clicked, this, &MainWindow::onCopyDiagnosticsClicked);
-
-    m_btnClearConsole = new QPushButton("Clear (Ctrl+K)", consoleContainer);
-    m_btnClearConsole->setFixedHeight(26);
-    connect(m_btnClearConsole, &QPushButton::clicked, this, &MainWindow::onClearConsoleClicked);
-
-    consoleTopBar->addWidget(consoleHeader);
-    consoleTopBar->addStretch();
-    consoleTopBar->addWidget(m_btnCopyDiagnostics);
-    consoleTopBar->addWidget(m_btnClearConsole);
-
-    consoleLayout->addLayout(consoleTopBar);
-
-    m_consoleOutput = new QTextEdit(consoleContainer);
-    m_consoleOutput->setReadOnly(true);
-    m_consoleOutput->setObjectName("consoleOutput");
-    consoleLayout->addWidget(m_consoleOutput);
-
-    vSplitter->addWidget(consoleContainer);
-    vSplitter->setSizes({600, 200});
+    // Bottom Developer Console & Runtime Diagnostics Panel
+    m_developerConsole = new DeveloperConsolePanel(vSplitter);
+    vSplitter->addWidget(m_developerConsole);
+    vSplitter->setSizes({550, 250});
 
     middleLayout->addWidget(vSplitter);
     rootLayout->addWidget(middleContainer, 1);
@@ -480,10 +480,12 @@ void MainWindow::updateSessionState(core::SessionState oldState, core::SessionSt
 }
 
 void MainWindow::appendLog(const QString& line, bool isStderr) {
-    if (isStderr) {
-        m_consoleOutput->append(QString("<span style='color: #ef4444;'>%1</span>").arg(line.toHtmlEscaped()));
-    } else {
-        m_consoleOutput->append(QString("<span style='color: #cbd5e1;'>%1</span>").arg(line.toHtmlEscaped()));
+    if (m_developerConsole) {
+        m_developerConsole->appendLog(
+            isStderr ? ConsoleLogLevel::Error : ConsoleLogLevel::Info,
+            ConsoleLogSource::Metro,
+            line
+        );
     }
 }
 
@@ -495,16 +497,18 @@ void MainWindow::onZoomChanged(int zoomPercent) {
 }
 
 void MainWindow::onCopyDiagnosticsClicked() {
-    QString diagnostics = m_consoleOutput->toPlainText();
-    QClipboard* clipboard = QApplication::clipboard();
-    clipboard->setText(diagnostics);
-    statusBar()->showMessage("Diagnostics copied to clipboard!", 3000);
-    appendLog("[Diagnostics] Full log buffer copied to system clipboard.");
+    if (m_developerConsole) {
+        QClipboard* clipboard = QApplication::clipboard();
+        clipboard->setText(m_developerConsole->exportAsText());
+        statusBar()->showMessage("Diagnostics copied to clipboard!", 3000);
+    }
 }
 
 void MainWindow::onClearConsoleClicked() {
-    m_consoleOutput->clear();
-    statusBar()->showMessage("Console cleared.", 2000);
+    if (m_developerConsole) {
+        m_developerConsole->clear();
+        statusBar()->showMessage("Console cleared.", 2000);
+    }
 }
 
 void MainWindow::onOpenProjectClicked() {

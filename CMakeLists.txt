@@ -42,6 +42,8 @@ add_library(ionexa_core STATIC
     src/ui/inspector_panel.cpp
     src/ui/viewport_manager.hpp
     src/ui/viewport_manager.cpp
+    src/ui/developer_console_panel.hpp
+    src/ui/developer_console_panel.cpp
 )
 
 target_include_directories(ionexa_core PUBLIC
@@ -100,6 +102,7 @@ add_executable(ionexa_unit_tests
     tests/unit/test_ui_components.hpp
     tests/unit/test_fast_refresh.hpp
     tests/unit/test_viewport_presets.hpp
+    tests/unit/test_developer_console.hpp
     tests/unit/main.cpp
 )
 

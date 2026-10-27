@@ -204,6 +204,36 @@ void WebView2Widget::initWebView() {
             }));
         }
     });
+
+    function sendConsole(level, args) {
+        if (!window.chrome || !window.chrome.webview) return;
+        try {
+            var msg = Array.prototype.slice.call(args).map(function(item) {
+                if (typeof item === 'object') {
+                    try { return JSON.stringify(item); } catch(e) { return String(item); }
+                }
+                return String(item);
+            }).join(' ');
+            window.chrome.webview.postMessage(JSON.stringify({
+                type: 'console_log',
+                level: level,
+                message: msg,
+                timestamp: Date.now()
+            }));
+        } catch(e) {}
+    }
+
+    var _log = console.log;
+    var _info = console.info;
+    var _warn = console.warn;
+    var _err = console.error;
+    var _dbg = console.debug;
+
+    console.log = function() { _log.apply(console, arguments); sendConsole('info', arguments); };
+    console.info = function() { _info.apply(console, arguments); sendConsole('info', arguments); };
+    console.warn = function() { _warn.apply(console, arguments); sendConsole('warning', arguments); };
+    console.error = function() { _err.apply(console, arguments); sendConsole('error', arguments); };
+    console.debug = function() { _dbg.apply(console, arguments); sendConsole('debug', arguments); };
 })();
 )";
                             m_webview->AddScriptToExecuteOnDocumentCreated(
