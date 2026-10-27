@@ -28,6 +28,8 @@ add_library(ionexa_core STATIC
     src/engines/runtime_engine.hpp
     src/engines/webview2_widget.hpp
     src/engines/webview2_widget.cpp
+    src/engines/fast_refresh_bridge.hpp
+    src/engines/fast_refresh_bridge.cpp
     src/process/process_supervisor.hpp
     src/process/process_supervisor.cpp
     src/process/metro_supervisor.hpp
@@ -94,6 +96,7 @@ add_executable(ionexa_unit_tests
     tests/unit/test_metro_supervisor.hpp
     tests/unit/test_webview2_engine.hpp
     tests/unit/test_ui_components.hpp
+    tests/unit/test_fast_refresh.hpp
     tests/unit/main.cpp
 )
 

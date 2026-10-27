@@ -25,6 +25,7 @@ WebView2Widget::~WebView2Widget() {
         if (m_navStartingToken.value) m_webview->remove_NavigationStarting(m_navStartingToken);
         if (m_navCompletedToken.value) m_webview->remove_NavigationCompleted(m_navCompletedToken);
         if (m_processFailedToken.value) m_webview->remove_ProcessFailed(m_processFailedToken);
+        if (m_webMessageReceivedToken.value) m_webview->remove_WebMessageReceived(m_webMessageReceivedToken);
     }
     if (m_controller) {
         m_controller->Close();
@@ -148,6 +149,70 @@ void WebView2Widget::initWebView() {
                                 &m_processFailedToken
                             );
 
+                            // Listen for WebMessages (page IPC)
+                            m_webview->add_WebMessageReceived(
+                                Callback<ICoreWebView2WebMessageReceivedEventHandler>(
+                                    [this](ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
+                                        LPWSTR messageRaw = nullptr;
+                                        if (SUCCEEDED(args->TryGetWebMessageAsString(&messageRaw)) && messageRaw) {
+                                            QString qMsg = QString::fromWCharArray(messageRaw);
+                                            CoTaskMemFree(messageRaw);
+                                            emit webMessageReceived(qMsg);
+                                        }
+                                        return S_OK;
+                                    }).Get(),
+                                &m_webMessageReceivedToken
+                            );
+
+                            // Inject IOneXa client runtime bridge script
+                            const wchar_t* bridgeScript = LR"(
+(function() {
+    if (window.__ionexa_bridge_installed) return;
+    window.__ionexa_bridge_installed = true;
+    
+    if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage(JSON.stringify({
+            type: 'page_loaded',
+            url: window.location.href,
+            timestamp: Date.now()
+        }));
+    }
+
+    window.addEventListener('message', function(ev) {
+        try {
+            if (ev.data && typeof ev.data === 'string') {
+                var d = JSON.parse(ev.data);
+                if (d.type === 'fast-refresh' || d.type === 'update-done') {
+                    if (window.chrome && window.chrome.webview) {
+                        window.chrome.webview.postMessage(JSON.stringify({
+                            type: 'fast_refresh_applied',
+                            timestamp: Date.now()
+                        }));
+                    }
+                }
+            }
+        } catch(e) {}
+    });
+
+    window.addEventListener('error', function(err) {
+        if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.postMessage(JSON.stringify({
+                type: 'runtime_error',
+                message: err.message || 'Script error',
+                filename: err.filename || '',
+                lineno: err.lineno || 0
+            }));
+        }
+    });
+})();
+)";
+                            m_webview->AddScriptToExecuteOnDocumentCreated(
+                                bridgeScript,
+                                Callback<ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler>(
+                                    [](HRESULT, LPCWSTR) -> HRESULT { return S_OK; }
+                                ).Get()
+                            );
+
                             m_initialized = true;
                             emit initialized();
 
@@ -181,10 +246,18 @@ void WebView2Widget::navigate(const QString& url) {
 #endif
 }
 
-void WebView2Widget::reload() {
+void WebView2Widget::reload(bool ignoreCache) {
 #ifdef _WIN32
     if (m_webview) {
-        m_webview->Reload();
+        if (ignoreCache) {
+            m_webview->CallDevToolsProtocolMethod(
+                L"Page.reload",
+                L"{\"ignoreCache\":true}",
+                nullptr
+            );
+        } else {
+            m_webview->Reload();
+        }
     }
 #endif
 }
@@ -210,6 +283,29 @@ void WebView2Widget::executeScript(const QString& script) {
     if (m_webview) {
         std::wstring wScript = script.toStdWString();
         m_webview->ExecuteScript(wScript.c_str(), nullptr);
+    }
+#endif
+}
+
+void WebView2Widget::postWebMessageAsJson(const QString& json) {
+#ifdef _WIN32
+    if (m_webview) {
+        std::wstring wJson = json.toStdWString();
+        m_webview->PostWebMessageAsJson(wJson.c_str());
+    }
+#endif
+}
+
+void WebView2Widget::addScriptToExecuteOnDocumentCreated(const QString& script) {
+#ifdef _WIN32
+    if (m_webview) {
+        std::wstring wScript = script.toStdWString();
+        m_webview->AddScriptToExecuteOnDocumentCreated(
+            wScript.c_str(),
+            Callback<ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler>(
+                [](HRESULT, LPCWSTR) -> HRESULT { return S_OK; }
+            ).Get()
+        );
     }
 #endif
 }

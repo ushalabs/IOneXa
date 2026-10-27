@@ -18,7 +18,8 @@ namespace ionexa::ui {
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , m_stateMachine(std::make_unique<core::SessionStateMachine>())
-    , m_metroSupervisor(std::make_unique<process::MetroSupervisor>(this)) {
+    , m_metroSupervisor(std::make_unique<process::MetroSupervisor>(this))
+    , m_hmrBridge(std::make_unique<engines::FastRefreshBridge>(this)) {
     
     m_stateMachine->setOnStateChanged([this](core::SessionState oldState, core::SessionState newState) {
         QMetaObject::invokeMethod(this, [this, oldState, newState]() {
@@ -33,11 +34,58 @@ MainWindow::MainWindow(QWidget* parent)
     });
 
     connect(m_metroSupervisor.get(), &process::MetroSupervisor::ready, this, &MainWindow::onMetroReady);
-    connect(m_metroSupervisor.get(), &process::MetroSupervisor::logOutput, this, &MainWindow::appendLog);
+    connect(m_metroSupervisor.get(), &process::MetroSupervisor::logOutput, this, [this](const QString& line, bool isStderr) {
+        appendLog(line, isStderr);
+        if (m_hmrBridge) {
+            m_hmrBridge->processMetroLog(line);
+        }
+    });
     connect(m_metroSupervisor.get(), &process::MetroSupervisor::processTerminated, this, [this](int exitCode) {
         appendLog(QString("[Supervisor] Process exited with code %1").arg(exitCode));
+        if (m_hmrBridge) {
+            m_hmrBridge->markDevServerStopped();
+        }
         if (m_stateMachine->canTransitionTo(core::SessionState::Stopped)) {
             m_stateMachine->transitionTo(core::SessionState::Stopped);
+        }
+    });
+
+    // Fast Refresh Bridge Signals
+    connect(m_hmrBridge.get(), &engines::FastRefreshBridge::reloadRequested, this, [this](bool hard) {
+        if (m_webView) {
+            m_webView->reload(hard);
+        }
+    });
+
+    connect(m_hmrBridge.get(), &engines::FastRefreshBridge::fastRefreshDetected, this, [this](const QString& details) {
+        appendLog(QString("[Fast Refresh] %1").arg(details));
+        statusBar()->showMessage(QString("Fast Refresh: %1").arg(details), 3000);
+    });
+
+    connect(m_hmrBridge.get(), &engines::FastRefreshBridge::bundleError, this, [this](const QString& err) {
+        appendLog(QString("[Bundle Error] %1").arg(err), true);
+        statusBar()->showMessage("Bundle compilation error!", 5000);
+    });
+
+    connect(m_hmrBridge.get(), &engines::FastRefreshBridge::staleSessionDetected, this, [this](const QString& reason) {
+        appendLog(QString("[Live Reload] Stale session: %1").arg(reason), true);
+        statusBar()->showMessage("Dev server offline — Reconnecting...", 5000);
+    });
+
+    connect(m_hmrBridge.get(), &engines::FastRefreshBridge::reconnected, this, [this]() {
+        appendLog("[Live Reload] Metro dev server connection restored. Preview reloaded.");
+        statusBar()->showMessage("Dev server reconnected!", 3000);
+    });
+
+    connect(m_hmrBridge.get(), &engines::FastRefreshBridge::statsUpdated, this, [this](const engines::FastRefreshStats& stats) {
+        if (m_inspectorPanel && m_hmrBridge) {
+            m_inspectorPanel->updateFastRefresh(stats, m_hmrBridge->state());
+        }
+    });
+
+    connect(m_hmrBridge.get(), &engines::FastRefreshBridge::stateChanged, this, [this](engines::BridgeState state) {
+        if (m_inspectorPanel && m_hmrBridge) {
+            m_inspectorPanel->updateFastRefresh(m_hmrBridge->stats(), state);
         }
     });
 
@@ -192,6 +240,12 @@ void MainWindow::setupUi() {
 
     connect(m_webView, &engines::WebView2Widget::rendererCrashed, this, [this](int reason) {
         appendLog(QString("[Renderer] CRITICAL: WebView2 renderer process crashed (reason=%1)").arg(reason), true);
+    });
+
+    connect(m_webView, &engines::WebView2Widget::webMessageReceived, this, [this](const QString& msg) {
+        if (m_hmrBridge) {
+            m_hmrBridge->processWebMessage(msg);
+        }
     });
 
     canvasLayout->addWidget(m_deviceViewport);
@@ -442,21 +496,29 @@ void MainWindow::onStartClicked() {
 void MainWindow::onStopClicked() {
     if (m_stateMachine->canTransitionTo(core::SessionState::Stopping)) {
         m_stateMachine->transitionTo(core::SessionState::Stopping);
+        if (m_hmrBridge) {
+            m_hmrBridge->markDevServerStopped();
+        }
         m_metroSupervisor->stop();
         m_stateMachine->transitionTo(core::SessionState::Stopped);
     }
 }
 
 void MainWindow::onReloadClicked() {
-    appendLog("[Engine] Reload requested.");
-    if (m_webView) {
+    appendLog("[Engine] Manual reload requested.");
+    if (m_hmrBridge) {
+        m_hmrBridge->requestManualReload(false);
+    } else if (m_webView) {
         m_webView->reload();
     }
 }
 
 void MainWindow::onMetroReady(const QString& url, int port) {
-    Q_UNUSED(port);
-    appendLog(QString("[Engine] Metro dev server confirmed ready at %1").arg(url));
+    appendLog(QString("[Engine] Metro dev server confirmed ready at %1 (port %2)").arg(url).arg(port));
+    if (m_hmrBridge) {
+        m_hmrBridge->setMetroEndpoint("127.0.0.1", port);
+        m_hmrBridge->markDevServerStarted(port);
+    }
     if (m_placeholderLabel) m_placeholderLabel->hide();
     if (m_webView) {
         m_webView->show();

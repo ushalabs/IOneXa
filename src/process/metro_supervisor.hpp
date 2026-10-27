@@ -5,6 +5,7 @@
 #include <memory>
 #include <functional>
 #include <atomic>
+#include <thread>
 
 #include "process_supervisor.hpp"
 #include "project/project_scanner.hpp"
@@ -53,6 +54,7 @@ private:
     MetroStatus m_status{MetroStatus::Idle};
     int m_activePort{0};
     std::atomic<bool> m_stopRequested{false};
+    std::thread m_monitorThread;
 };
 
 } // namespace ionexa::process

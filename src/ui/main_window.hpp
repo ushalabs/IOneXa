@@ -12,6 +12,7 @@
 #include "project/project_scanner.hpp"
 #include "process/metro_supervisor.hpp"
 #include "engines/webview2_widget.hpp"
+#include "engines/fast_refresh_bridge.hpp"
 #include "nav_rail.hpp"
 #include "inspector_panel.hpp"
 
@@ -45,6 +46,7 @@ private:
 
     std::unique_ptr<core::SessionStateMachine> m_stateMachine;
     std::unique_ptr<process::MetroSupervisor> m_metroSupervisor;
+    std::unique_ptr<engines::FastRefreshBridge> m_hmrBridge;
     project::ProjectDetails m_currentProject;
 
     // UI elements

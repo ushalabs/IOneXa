@@ -91,9 +91,14 @@ bool MetroSupervisor::start(const project::ProjectDetails& project, int preferre
     }
 
     // Monitor readiness in background thread
-    std::thread([this, port = m_activePort]() {
+    if (m_monitorThread.joinable()) {
+        m_stopRequested.store(true);
+        m_monitorThread.join();
+    }
+    m_stopRequested.store(false);
+    m_monitorThread = std::thread([this, port = m_activePort]() {
         monitorReadiness(port);
-    }).detach();
+    });
 
     return true;
 }
@@ -133,6 +138,9 @@ void MetroSupervisor::monitorReadiness(int port, int timeoutMs) {
 
 bool MetroSupervisor::stop(int timeoutMs) {
     m_stopRequested.store(true);
+    if (m_monitorThread.joinable()) {
+        m_monitorThread.join();
+    }
     if (m_status == MetroStatus::Idle || m_status == MetroStatus::Stopped) {
         return true;
     }

@@ -53,7 +53,20 @@ void InspectorPanel::setupUi() {
     formProcess->addRow("Port:", m_lblProcessPort);
     mainLayout->addWidget(grpProcess);
 
-    // Group 4: Project Information
+    // Group 4: Fast Refresh & Live Reload
+    auto* grpHmr = new QGroupBox("Fast Refresh & Live Reload", this);
+    auto* formHmr = new QFormLayout(grpHmr);
+    m_lblHmrStatus = new QLabel("Idle", grpHmr);
+    m_lblHmrRefreshCount = new QLabel("0", grpHmr);
+    m_lblHmrReloadCount = new QLabel("0", grpHmr);
+    m_lblHmrLastUpdate = new QLabel("—", grpHmr);
+    formHmr->addRow("Status:", m_lblHmrStatus);
+    formHmr->addRow("Refreshes:", m_lblHmrRefreshCount);
+    formHmr->addRow("Reloads:", m_lblHmrReloadCount);
+    formHmr->addRow("Last Active:", m_lblHmrLastUpdate);
+    mainLayout->addWidget(grpHmr);
+
+    // Group 5: Project Information
     auto* grpProject = new QGroupBox("Project Metadata", this);
     auto* formProject = new QFormLayout(grpProject);
     m_lblProjectName = new QLabel("None", grpProject);
@@ -147,6 +160,39 @@ void InspectorPanel::updateViewport(int width, int height, bool isLandscape, dou
     m_lblDimensions->setText(QString("%1 x %2 px").arg(width).arg(height));
     m_lblOrientation->setText(isLandscape ? "Landscape" : "Portrait");
     m_lblZoom->setText(QString("%1%").arg(static_cast<int>(zoom * 100)));
+}
+
+void InspectorPanel::updateFastRefresh(const engines::FastRefreshStats& stats, engines::BridgeState state) {
+    switch (state) {
+    case engines::BridgeState::Connecting:
+        m_lblHmrStatus->setText("Connecting...");
+        m_lblHmrStatus->setStyleSheet("color: #fde047;");
+        break;
+    case engines::BridgeState::Connected:
+        m_lblHmrStatus->setText("Connected (Active)");
+        m_lblHmrStatus->setStyleSheet("color: #4ade80;");
+        break;
+    case engines::BridgeState::Reconnecting:
+        m_lblHmrStatus->setText("Reconnecting...");
+        m_lblHmrStatus->setStyleSheet("color: #fb923c;");
+        break;
+    case engines::BridgeState::Stale:
+        m_lblHmrStatus->setText("Stale (Disconnected)");
+        m_lblHmrStatus->setStyleSheet("color: #f87171;");
+        break;
+    default:
+        m_lblHmrStatus->setText("Idle");
+        m_lblHmrStatus->setStyleSheet("color: #94a3b8;");
+        break;
+    }
+
+    m_lblHmrRefreshCount->setText(QString::number(stats.fastRefreshCount));
+    m_lblHmrReloadCount->setText(QString::number(stats.totalReloads));
+    if (stats.lastRefreshTime.isValid()) {
+        m_lblHmrLastUpdate->setText(stats.lastRefreshTime.toString("hh:mm:ss"));
+    } else {
+        m_lblHmrLastUpdate->setText("—");
+    }
 }
 
 } // namespace ionexa::ui

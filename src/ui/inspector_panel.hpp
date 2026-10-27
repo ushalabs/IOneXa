@@ -5,6 +5,7 @@
 #include <QVBoxLayout>
 #include "project/project_scanner.hpp"
 #include "process/metro_supervisor.hpp"
+#include "engines/fast_refresh_bridge.hpp"
 
 namespace ionexa::ui {
 
@@ -17,6 +18,7 @@ public:
     void updateProject(const project::ProjectDetails& details);
     void updateProcess(int pid, int port, process::MetroStatus status);
     void updateViewport(int width, int height, bool isLandscape, double zoom);
+    void updateFastRefresh(const engines::FastRefreshStats& stats, engines::BridgeState state);
 
 private:
     void setupUi();
@@ -35,7 +37,13 @@ private:
     QLabel* m_lblProcessPid{nullptr};
     QLabel* m_lblProcessPort{nullptr};
 
-    // Section 4: Project Metadata
+    // Section 4: Fast Refresh & Live Reload
+    QLabel* m_lblHmrStatus{nullptr};
+    QLabel* m_lblHmrRefreshCount{nullptr};
+    QLabel* m_lblHmrReloadCount{nullptr};
+    QLabel* m_lblHmrLastUpdate{nullptr};
+
+    // Section 5: Project Metadata
     QLabel* m_lblProjectName{nullptr};
     QLabel* m_lblExpoSdk{nullptr};
     QLabel* m_lblPackageManager{nullptr};

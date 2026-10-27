@@ -22,10 +22,12 @@ public:
     ~WebView2Widget() override;
 
     void navigate(const QString& url);
-    void reload();
+    void reload(bool ignoreCache = false);
     void openDevTools();
     void setZoomFactor(double factor);
     void executeScript(const QString& script);
+    void postWebMessageAsJson(const QString& json);
+    void addScriptToExecuteOnDocumentCreated(const QString& script);
 
     [[nodiscard]] bool isInitialized() const;
     [[nodiscard]] QString currentUrl() const;
@@ -36,6 +38,7 @@ signals:
     void navigationCompleted(bool success, int errorCode);
     void rendererCrashed(int reason);
     void consoleMessageReceived(const QString& message, int level);
+    void webMessageReceived(const QString& message);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -51,6 +54,7 @@ private:
     EventRegistrationToken m_navStartingToken{};
     EventRegistrationToken m_navCompletedToken{};
     EventRegistrationToken m_processFailedToken{};
+    EventRegistrationToken m_webMessageReceivedToken{};
 #endif
 
     bool m_initialized{false};
