@@ -25,6 +25,8 @@ add_library(ionexa_core STATIC
     src/core/task_coordinator.cpp
     src/core/app_settings.hpp
     src/core/app_settings.cpp
+    src/core/security_policy.hpp
+    src/core/security_policy.cpp
     src/engines/runtime_engine.hpp
     src/engines/webview2_widget.hpp
     src/engines/webview2_widget.cpp
@@ -113,6 +115,7 @@ add_executable(ionexa_unit_tests
     tests/unit/test_compatibility_analyzer.hpp
     tests/unit/test_feature_suite.hpp
     tests/unit/test_regression_suite.hpp
+    tests/unit/test_hardening_stress.hpp
     tests/unit/main.cpp
 )
 
