@@ -23,6 +23,7 @@ void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QS
 #include "test_developer_console.hpp"
 #include "test_network_inspector.hpp"
 #include "test_compatibility_analyzer.hpp"
+#include "test_feature_suite.hpp"
 
 int main(int argc, char* argv[]) {
     Q_UNUSED(argc);
@@ -101,10 +102,14 @@ int main(int argc, char* argv[]) {
         TestCompatibilityAnalyzer tc;
         runSuite("TestCompatibilityAnalyzer", tc);
     }
+    {
+        TestFeatureSuite tc;
+        runSuite("TestFeatureSuite", tc);
+    }
 
     if (status == 0) {
         std::cout << "\n============================================\n";
-        std::cout << "ALL 15 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
+        std::cout << "ALL 16 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
         std::cout << "============================================\n";
     }
 
