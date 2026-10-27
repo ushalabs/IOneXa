@@ -16,6 +16,7 @@ private slots:
         QCOMPARE(settings.defaultPort(), 8081);
         QVERIFY(!settings.startInLandscape());
         QVERIFY(!settings.telemetryOptIn());
+        QVERIFY(!settings.experimentalNativeWindowsRuntime());
         QVERIFY(settings.recentProjects().empty());
     }
 
@@ -40,6 +41,7 @@ private slots:
         s1.setDefaultDevicePreset("Pixel 7 (412 x 915)");
         s1.setDefaultPort(8090);
         s1.setStartInLandscape(true);
+        s1.setExperimentalNativeWindowsRuntime(true);
         s1.addRecentProject("C:/Apps/ExpoTest");
 
         QVERIFY(s1.saveToFile(filePath.toStdString()));
@@ -49,6 +51,7 @@ private slots:
         QCOMPARE(QString::fromStdString(s2.defaultDevicePreset()), QString("Pixel 7 (412 x 915)"));
         QCOMPARE(s2.defaultPort(), 8090);
         QVERIFY(s2.startInLandscape());
+        QVERIFY(s2.experimentalNativeWindowsRuntime());
         QCOMPARE(s2.recentProjects().size(), static_cast<size_t>(1));
         QCOMPARE(QString::fromStdString(s2.recentProjects()[0]), QString("C:/Apps/ExpoTest"));
     }

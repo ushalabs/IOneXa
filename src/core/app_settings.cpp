@@ -38,6 +38,7 @@ std::string AppSettings::toJson() const {
     root["customViewportHeight"] = m_customViewportHeight;
     root["touchEmulationEnabled"] = m_touchEmulationEnabled;
     root["zoomFactor"] = m_zoomFactor;
+    root["experimentalNativeWindowsRuntime"] = m_experimentalNativeWindowsRuntime;
 
     QJsonArray recents;
     for (const auto& p : m_recentProjects) {
@@ -80,6 +81,9 @@ bool AppSettings::fromJson(const std::string& jsonString) {
     }
     if (root.contains("zoomFactor") && root["zoomFactor"].isDouble()) {
         m_zoomFactor = root["zoomFactor"].toDouble();
+    }
+    if (root.contains("experimentalNativeWindowsRuntime") && root["experimentalNativeWindowsRuntime"].isBool()) {
+        m_experimentalNativeWindowsRuntime = root["experimentalNativeWindowsRuntime"].toBool();
     }
     if (root.contains("recentProjects") && root["recentProjects"].isArray()) {
         m_recentProjects.clear();

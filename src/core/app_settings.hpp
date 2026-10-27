@@ -33,6 +33,9 @@ public:
     [[nodiscard]] double zoomFactor() const noexcept { return m_zoomFactor; }
     void setZoomFactor(double zoom) { m_zoomFactor = zoom; }
 
+    [[nodiscard]] bool experimentalNativeWindowsRuntime() const noexcept { return m_experimentalNativeWindowsRuntime; }
+    void setExperimentalNativeWindowsRuntime(bool enable) { m_experimentalNativeWindowsRuntime = enable; }
+
     [[nodiscard]] const std::vector<std::string>& recentProjects() const noexcept { return m_recentProjects; }
     void addRecentProject(const std::string& projectPath);
     void clearRecentProjects();
@@ -52,6 +55,7 @@ private:
     int m_customViewportHeight{844};
     bool m_touchEmulationEnabled{true};
     double m_zoomFactor{1.0};
+    bool m_experimentalNativeWindowsRuntime{false};
     std::vector<std::string> m_recentProjects;
 };
 
