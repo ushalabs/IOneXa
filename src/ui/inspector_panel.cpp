@@ -79,6 +79,17 @@ void InspectorPanel::setupUi() {
     formProject->addRow("Web Ready:", m_lblWebSupport);
     mainLayout->addWidget(grpProject);
 
+    // Group 6: Compatibility Analysis
+    auto* grpCompat = new QGroupBox("Compatibility Analysis", this);
+    auto* formCompat = new QFormLayout(grpCompat);
+    m_lblCompatScore = new QLabel("—", grpCompat);
+    m_lblCompatBreakdown = new QLabel("—", grpCompat);
+    m_lblCompatFiles = new QLabel("—", grpCompat);
+    formCompat->addRow("Web Score:", m_lblCompatScore);
+    formCompat->addRow("Modules:", m_lblCompatBreakdown);
+    formCompat->addRow("Platform Files:", m_lblCompatFiles);
+    mainLayout->addWidget(grpCompat);
+
     mainLayout->addStretch();
 
     setStyleSheet(R"(
@@ -193,6 +204,24 @@ void InspectorPanel::updateFastRefresh(const engines::FastRefreshStats& stats, e
     } else {
         m_lblHmrLastUpdate->setText("—");
     }
+}
+
+void InspectorPanel::updateCompatibility(const project::CompatibilityReport& report) {
+    m_lastReport = report;
+    m_lblCompatScore->setText(QString("%1%").arg(report.compatibilityScore, 0, 'f', 1));
+    if (report.compatibilityScore >= 90.0) {
+        m_lblCompatScore->setStyleSheet("color: #4ade80; font-weight: 700;");
+    } else if (report.compatibilityScore >= 70.0) {
+        m_lblCompatScore->setStyleSheet("color: #fbbf24; font-weight: 700;");
+    } else {
+        m_lblCompatScore->setStyleSheet("color: #f87171; font-weight: 700;");
+    }
+
+    m_lblCompatBreakdown->setText(QString("%1 Supp / %2 Part / %3 Unsupp")
+        .arg(report.supportedCount).arg(report.partialCount).arg(report.unsupportedCount));
+
+    m_lblCompatFiles->setText(QString("%1 .ios / %2 .web")
+        .arg(report.fileAnalysis.iosSpecificFiles).arg(report.fileAnalysis.webSpecificFiles));
 }
 
 } // namespace ionexa::ui

@@ -4,6 +4,7 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include "project/project_scanner.hpp"
+#include "project/compatibility_analyzer.hpp"
 #include "process/metro_supervisor.hpp"
 #include "engines/fast_refresh_bridge.hpp"
 
@@ -19,6 +20,7 @@ public:
     void updateProcess(int pid, int port, process::MetroStatus status);
     void updateViewport(int width, int height, bool isLandscape, double zoom);
     void updateFastRefresh(const engines::FastRefreshStats& stats, engines::BridgeState state);
+    void updateCompatibility(const project::CompatibilityReport& report);
 
 private:
     void setupUi();
@@ -48,6 +50,12 @@ private:
     QLabel* m_lblExpoSdk{nullptr};
     QLabel* m_lblPackageManager{nullptr};
     QLabel* m_lblWebSupport{nullptr};
+
+    // Section 6: Compatibility Analysis
+    QLabel* m_lblCompatScore{nullptr};
+    QLabel* m_lblCompatBreakdown{nullptr};
+    QLabel* m_lblCompatFiles{nullptr};
+    project::CompatibilityReport m_lastReport;
 };
 
 } // namespace ionexa::ui

@@ -14,6 +14,7 @@
 #include <QKeySequence>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include "project/compatibility_analyzer.hpp"
 
 namespace ionexa::ui {
 
@@ -614,6 +615,18 @@ void MainWindow::onOpenProjectClicked() {
         if (!m_currentProject.hasWebSupport) {
             appendLog(QString("[Project] Warning: Missing web packages. Run '%1'")
                       .arg(QString::fromStdString(m_currentProject.remediationCommand)), true);
+        }
+
+        auto compatReport = project::CompatibilityAnalyzer::analyze(dir);
+        if (m_inspectorPanel) {
+            m_inspectorPanel->updateCompatibility(compatReport);
+        }
+        appendLog(QString("[Compatibility] Web Score: %1% (%2)")
+            .arg(compatReport.compatibilityScore, 0, 'f', 1)
+            .arg(compatReport.tierSummary()));
+        for (const auto& rec : compatReport.recommendations) {
+            bool isWarning = rec.contains("requires native") || rec.contains("Ensure web fallback");
+            appendLog(QString("[Compatibility Advisory] %1").arg(rec), isWarning);
         }
 
         m_stateMachine->transitionTo(core::SessionState::Ready);

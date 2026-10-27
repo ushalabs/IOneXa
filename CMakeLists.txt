@@ -38,6 +38,8 @@ add_library(ionexa_core STATIC
     src/process/metro_supervisor.cpp
     src/project/project_scanner.hpp
     src/project/project_scanner.cpp
+    src/project/compatibility_analyzer.hpp
+    src/project/compatibility_analyzer.cpp
     src/ui/nav_rail.hpp
     src/ui/nav_rail.cpp
     src/ui/inspector_panel.hpp
@@ -108,6 +110,7 @@ add_executable(ionexa_unit_tests
     tests/unit/test_viewport_presets.hpp
     tests/unit/test_developer_console.hpp
     tests/unit/test_network_inspector.hpp
+    tests/unit/test_compatibility_analyzer.hpp
     tests/unit/main.cpp
 )
 

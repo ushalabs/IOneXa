@@ -22,74 +22,89 @@ void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QS
 #include "test_viewport_presets.hpp"
 #include "test_developer_console.hpp"
 #include "test_network_inspector.hpp"
+#include "test_compatibility_analyzer.hpp"
 
 int main(int argc, char* argv[]) {
+    Q_UNUSED(argc);
+    Q_UNUSED(argv);
     qInstallMessageHandler(myMessageOutput);
     QApplication app(argc, argv);
     int status = 0;
 
+    auto runSuite = [&](const char* name, auto& tc) {
+        int r = QTest::qExec(&tc);
+        if (r != 0) {
+            std::cerr << "FAILED: " << name << " (code " << r << ")" << std::endl;
+        } else {
+            std::cout << "PASSED: " << name << std::endl;
+        }
+        status |= r;
+    };
+
     {
         TestSessionState tc;
-        status |= QTest::qExec(&tc, argc, argv);
+        runSuite("TestSessionState", tc);
     }
     {
         TestErrors tc;
-        status |= QTest::qExec(&tc, argc, argv);
+        runSuite("TestErrors", tc);
     }
     {
         TestCapabilityManifest tc;
-        status |= QTest::qExec(&tc, argc, argv);
+        runSuite("TestCapabilityManifest", tc);
     }
     {
         TestStructuredLogger tc;
-        status |= QTest::qExec(&tc, argc, argv);
+        runSuite("TestStructuredLogger", tc);
     }
     {
         TestTaskCoordinator tc;
-        status |= QTest::qExec(&tc, argc, argv);
+        runSuite("TestTaskCoordinator", tc);
     }
     {
         TestAppSettings tc;
-        status |= QTest::qExec(&tc, argc, argv);
+        runSuite("TestAppSettings", tc);
     }
     {
         TestProjectScanner tc;
-        status |= QTest::qExec(&tc, argc, argv);
+        runSuite("TestProjectScanner", tc);
     }
     {
         TestMetroSupervisor tc;
-        int res = QTest::qExec(&tc, argc, argv);
-        if (res != 0) std::cerr << "TestMetroSupervisor FAILED with code " << res << std::endl;
-        status |= res;
+        runSuite("TestMetroSupervisor", tc);
     }
     {
         TestWebView2Engine tc;
-        status |= QTest::qExec(&tc, argc, argv);
+        runSuite("TestWebView2Engine", tc);
     }
     {
         TestUiComponents tc;
-        status |= QTest::qExec(&tc, argc, argv);
+        runSuite("TestUiComponents", tc);
     }
     {
         TestFastRefresh tc;
-        status |= QTest::qExec(&tc, argc, argv);
+        runSuite("TestFastRefresh", tc);
     }
     {
         TestViewportPresets tc;
-        status |= QTest::qExec(&tc, argc, argv);
+        runSuite("TestViewportPresets", tc);
     }
     {
         TestDeveloperConsole tc;
-        status |= QTest::qExec(&tc, argc, argv);
+        runSuite("TestDeveloperConsole", tc);
     }
     {
         TestNetworkInspector tc;
-        status |= QTest::qExec(&tc, argc, argv);
+        runSuite("TestNetworkInspector", tc);
+    }
+    {
+        TestCompatibilityAnalyzer tc;
+        runSuite("TestCompatibilityAnalyzer", tc);
     }
 
     if (status == 0) {
         std::cout << "\n============================================\n";
-        std::cout << "ALL 14 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
+        std::cout << "ALL 15 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
         std::cout << "============================================\n";
     }
 
