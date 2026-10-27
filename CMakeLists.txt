@@ -131,6 +131,7 @@ add_executable(ionexa_unit_tests
     tests/unit/test_device_manager.hpp
     tests/unit/test_debugging_workspace.hpp
     tests/unit/test_window_reliability.hpp
+    tests/unit/test_acceptance_deskflow.hpp
     tests/unit/main.cpp
 )
 

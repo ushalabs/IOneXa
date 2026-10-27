@@ -75,42 +75,42 @@ ModuleCompatibilityInfo CompatibilityAnalyzer::evaluateModule(const QString& mod
 
 FilePlatformAnalysis CompatibilityAnalyzer::scanSourceFiles(const QString& projectPath) {
     FilePlatformAnalysis result;
-    QDir dir(projectPath);
-    if (!dir.exists()) return result;
+    QDir rootDir(projectPath);
+    if (!rootDir.exists()) return result;
 
-    QDirIterator it(projectPath,
-                    {"*.js", "*.jsx", "*.ts", "*.tsx"},
-                    QDir::Files,
-                    QDirIterator::Subdirectories);
-
-    while (it.hasNext()) {
-        QString filePath = it.next();
-        QString relPath = dir.relativeFilePath(filePath);
-
-        // Skip ignored directories
-        if (relPath.startsWith("node_modules") ||
-            relPath.startsWith(".git") ||
-            relPath.startsWith(".expo") ||
-            relPath.startsWith("build") ||
-            relPath.startsWith("dist")) {
-            continue;
+    std::function<void(const QDir&)> traverse = [&](const QDir& currentDir) {
+        // Recurse into subdirectories while strictly pruning ignored trees upfront
+        const auto subDirs = currentDir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot | QDir::Readable);
+        for (const auto& d : subDirs) {
+            QString name = d.fileName();
+            if (name == "node_modules" || name == ".git" || name == ".expo" || name == "build" || name == "dist" || name == ".next" || name == ".idea" || name == ".vscode") {
+                continue;
+            }
+            traverse(QDir(d.absoluteFilePath()));
         }
 
-        result.totalSourceFiles++;
+        // Process source files in current directory
+        const auto files = currentDir.entryInfoList({"*.js", "*.jsx", "*.ts", "*.tsx"}, QDir::Files | QDir::Readable);
+        for (const auto& fi : files) {
+            result.totalSourceFiles++;
+            QString relPath = rootDir.relativeFilePath(fi.absoluteFilePath());
+            QString fileName = fi.fileName();
 
-        if (filePath.contains(".ios.")) {
-            result.iosSpecificFiles++;
-            result.iosFileList.append(relPath);
-        } else if (filePath.contains(".web.")) {
-            result.webSpecificFiles++;
-            result.webFileList.append(relPath);
-        } else if (filePath.contains(".native.")) {
-            result.nativeSpecificFiles++;
-        } else if (filePath.contains(".android.")) {
-            result.androidSpecificFiles++;
+            if (fileName.contains(".ios.")) {
+                result.iosSpecificFiles++;
+                result.iosFileList.append(relPath);
+            } else if (fileName.contains(".web.")) {
+                result.webSpecificFiles++;
+                result.webFileList.append(relPath);
+            } else if (fileName.contains(".native.")) {
+                result.nativeSpecificFiles++;
+            } else if (fileName.contains(".android.")) {
+                result.androidSpecificFiles++;
+            }
         }
-    }
+    };
 
+    traverse(rootDir);
     return result;
 }
 
@@ -195,8 +195,19 @@ CompatibilityReport CompatibilityAnalyzer::analyze(const QString& projectPath) {
                                       .arg(report.fileAnalysis.iosSpecificFiles));
     }
 
+    // Include notes for partial modules
+    for (const auto& mod : report.moduleResults) {
+        if (mod.tier == CompatibilityTier::Partial && !mod.webSupportNotes.isEmpty()) {
+            report.recommendations.append(QString("'%1': %2").arg(mod.moduleName, mod.webSupportNotes));
+        }
+    }
+
     if (report.unsupportedCount == 0 && report.compatibilityScore >= 90.0) {
         report.recommendations.append("Project is highly compatible with the IOneXa Expo web workbench runtime.");
+    }
+
+    if (report.recommendations.isEmpty()) {
+        report.recommendations.append(QString("Project compatibility is %1% (%2).").arg(report.compatibilityScore, 0, 'f', 1).arg(report.tierSummary()));
     }
 
     return report;
