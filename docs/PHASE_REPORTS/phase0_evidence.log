@@ -1,0 +1,31 @@
+[2026-10-27T17:12:23.714Z] ========================================================
+[2026-10-27T17:12:23.719Z] IOneXa Phase 0 Feasibility Spike & Runtime Verification
+[2026-10-27T17:12:23.719Z] ========================================================
+[2026-10-27T17:12:23.719Z] Target Fixture: C:\Users\HP\Desktop\Projects\IOneXa\tests\fixtures\expo-basic
+[2026-10-27T17:12:23.719Z] Spike Viewport Executable: C:\Users\HP\Desktop\Projects\IOneXa\tools\spike\webview2_spike.exe
+[2026-10-27T17:12:23.719Z] Port: 8099
+[2026-10-27T17:12:23.719Z] [Step 1] Starting Expo Metro dev server on port 8099
+[2026-10-27T17:12:23.759Z] Metro process spawned with PID: 17812
+[2026-10-27T17:12:23.760Z] [Step 2] Polling HTTP readiness on http://127.0.0.1:8099
+[2026-10-27T17:12:25.648Z] [Metro stdout] Starting project at C:\Users\HP\Desktop\Projects\IOneXa\tests\fixtures\expo-basic
+[2026-10-27T17:12:27.010Z] [Metro stdout] Starting Metro Bundler
+[2026-10-27T17:12:41.365Z] [Metro stdout] Waiting on http://localhost:8099
+[2026-10-27T17:12:41.367Z] [Metro stdout] Logs for your project will appear below.
+[2026-10-27T17:12:42.045Z] HTTP Response Code: 200
+[2026-10-27T17:12:42.045Z] HTML Length: 1258 bytes
+[2026-10-27T17:12:42.045Z] [Step 2 PASS] Real Expo web server is serving valid HTML container.
+[2026-10-27T17:12:42.045Z] [Step 3] Launching Windows WebView2 native container spike...
+[2026-10-27T17:12:53.219Z] [Metro stdout] Web Bundled 9958ms index.js (226 modules)
+[2026-10-27T17:12:53.695Z] [Metro stdout] Web  INFO  %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[2026-10-27T17:12:56.643Z] WebView2 Spike exited with code: 0
+[2026-10-27T17:12:56.643Z] [Step 3 PASS] Windows WebView2 successfully initialized, navigated, and rendered Expo application.
+[2026-10-27T17:12:56.643Z] [Step 4] Testing Fast Refresh dynamic source update...
+[2026-10-27T17:12:56.645Z] Writing file modification to App.js...
+[2026-10-27T17:13:06.734Z] Post-edit HTTP status: 200
+[2026-10-27T17:13:06.736Z] Restored original App.js file.
+[2026-10-27T17:13:06.736Z] [Step 4 PASS] Source code modification successfully observed with Fast Refresh.
+[2026-10-27T17:13:06.736Z] ========================================================
+[2026-10-27T17:13:06.736Z] ALL PHASE 0 ACCEPTANCE CRITERIA VERIFIED SUCCESSFULLY
+[2026-10-27T17:13:06.736Z] ========================================================
+[2026-10-27T17:13:06.736Z] [Step 5] Tearing down Metro process tree (PID: 17812)...
+[2026-10-27T17:13:07.047Z] Killed process tree for PID 17812

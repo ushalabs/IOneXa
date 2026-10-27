@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Native builds & C++
+build/
+out/
+bin/
+!vendor/webview2/bin/
+*.obj
+*.o
+*.exe
+*.dll
+*.pdb
+*.lib
+!vendor/webview2/lib/x64/*.lib
+!vendor/webview2/bin/x64/*.dll
+*.a
+*.ninja
+.ninja_*
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CMakeUserPresets.json
+
+# Visual Studio / IDE
+.vs/
+*.user
+*.suo
+*.userosv
+*.sln.docstates
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and environment
+*.log
+!docs/PHASE_REPORTS/*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env
+.env.local
+.env.*.local
