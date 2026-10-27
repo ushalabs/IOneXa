@@ -112,6 +112,7 @@ add_executable(ionexa_unit_tests
     tests/unit/test_network_inspector.hpp
     tests/unit/test_compatibility_analyzer.hpp
     tests/unit/test_feature_suite.hpp
+    tests/unit/test_regression_suite.hpp
     tests/unit/main.cpp
 )
 

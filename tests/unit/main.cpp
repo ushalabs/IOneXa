@@ -24,16 +24,18 @@ void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QS
 #include "test_network_inspector.hpp"
 #include "test_compatibility_analyzer.hpp"
 #include "test_feature_suite.hpp"
+#include "test_regression_suite.hpp"
 
 int main(int argc, char* argv[]) {
     Q_UNUSED(argc);
     Q_UNUSED(argv);
-    qInstallMessageHandler(myMessageOutput);
+    // qInstallMessageHandler(myMessageOutput);
     QApplication app(argc, argv);
     int status = 0;
 
     auto runSuite = [&](const char* name, auto& tc) {
-        int r = QTest::qExec(&tc);
+        char* args[] = {(char*)"test", (char*)"-v1"};
+        int r = QTest::qExec(&tc, 2, args);
         if (r != 0) {
             std::cerr << "FAILED: " << name << " (code " << r << ")" << std::endl;
         } else {
@@ -106,10 +108,14 @@ int main(int argc, char* argv[]) {
         TestFeatureSuite tc;
         runSuite("TestFeatureSuite", tc);
     }
+    {
+        TestRegressionSuite tc;
+        runSuite("TestRegressionSuite", tc);
+    }
 
     if (status == 0) {
         std::cout << "\n============================================\n";
-        std::cout << "ALL 16 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
+        std::cout << "ALL 17 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
         std::cout << "============================================\n";
     }
 
