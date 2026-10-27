@@ -102,27 +102,27 @@ ctest --test-dir build --output-on-failure
 
 ## 5. Development Phases & Roadmap
 
-| Phase | Title | Status | Git Commit |
+| Phase | Title | Status | Reports |
 |---|---|---|---|
-| Phase 0 | Feasibility Spike and Runtime Decision | In Progress | Pending |
-| Phase 1 | Repository Foundation and Build System | Planned | Pending |
-| Phase 2 | Runtime Engine Contracts and Session Lifecycle | Planned | Pending |
-| Phase 3 | Expo Project Import and Environment Diagnostics | Planned | Pending |
-| Phase 4 | Metro Launch and Windows Process Management | Planned | Pending |
-| Phase 5 | Live Expo Application Preview Engine | Planned | Pending |
-| Phase 6 | Modern Windows Workspace and Design System | Planned | Pending |
-| Phase 7 | Fast Refresh Integration and Live Reload | Planned | Pending |
-| Phase 8 | Responsive Device Viewports and Input Simulation | Planned | Pending |
-| Phase 9 | Developer Console and Runtime Diagnostics | Planned | Pending |
-| Phase 10 | Network Inspector and Debugging Integration | Planned | Pending |
-| Phase 11 | Expo Module and iOS Compatibility Analyzer | Planned | Pending |
-| Phase 12 | Real-World Expo Feature Test Suite | Planned | Pending |
-| Phase 13 | Automated Preview Testing and Regression Suite | Planned | Pending |
-| Phase 14 | Reliability Performance and Security Hardening | Planned | Pending |
-| Phase 15 | Experimental Native React Native Runtime Research | Planned | Pending |
-| Phase 16 | Native iOS Verification Handoff and Reports | Planned | Pending |
-| Phase 17 | Windows Packaging and Developer Documentation | Planned | Pending |
-| Phase 18 | Real Application Pilot and Version 0.1 Release | Planned | Pending |
+| Phase 0 | Feasibility Spike and Runtime Decision | Completed (PASS) | [PHASE_00.md](docs/PHASE_REPORTS/PHASE_00.md) |
+| Phase 1 | Repository Foundation and Build System | Completed (PASS) | [PHASE_01.md](docs/PHASE_REPORTS/PHASE_01.md) |
+| Phase 2 | Runtime Engine Contracts and Session Lifecycle | Completed (PASS) | [PHASE_02.md](docs/PHASE_REPORTS/PHASE_02.md) |
+| Phase 3 | Expo Project Import and Environment Diagnostics | Completed (PASS) | [PHASE_03.md](docs/PHASE_REPORTS/PHASE_03.md) |
+| Phase 4 | Metro Launch and Windows Process Management | Completed (PASS) | [PHASE_04.md](docs/PHASE_REPORTS/PHASE_04.md) |
+| Phase 5 | Live Expo Application Preview Engine | Completed (PASS) | [PHASE_05.md](docs/PHASE_REPORTS/PHASE_05.md) |
+| Phase 6 | Modern Windows Workspace and Design System | Completed (PASS) | [PHASE_06.md](docs/PHASE_REPORTS/PHASE_06.md) |
+| Phase 7 | Fast Refresh Integration and Live Reload | Completed (PASS) | [PHASE_07.md](docs/PHASE_REPORTS/PHASE_07.md) |
+| Phase 8 | Responsive Device Viewports and Input Simulation | Completed (PASS) | [PHASE_08.md](docs/PHASE_REPORTS/PHASE_08.md) |
+| Phase 9 | Developer Console and Runtime Diagnostics | Completed (PASS) | [PHASE_09.md](docs/PHASE_REPORTS/PHASE_09.md) |
+| Phase 10 | Network Inspector and Debugging Integration | Completed (PASS) | [PHASE_10.md](docs/PHASE_REPORTS/PHASE_10.md) |
+| Phase 11 | Expo Module and iOS Compatibility Analyzer | Completed (PASS) | [PHASE_11.md](docs/PHASE_REPORTS/PHASE_11.md) |
+| Phase 12 | Real-World Expo Feature Test Suite | Completed (PASS) | [PHASE_12.md](docs/PHASE_REPORTS/PHASE_12.md) |
+| Phase 13 | Automated Preview Testing and Regression Suite | Completed (PASS) | [PHASE_13.md](docs/PHASE_REPORTS/PHASE_13.md) |
+| Phase 14 | Reliability Performance and Security Hardening | Completed (PASS) | [PHASE_14.md](docs/PHASE_REPORTS/PHASE_14.md) |
+| Phase 15 | Experimental Native React Native Runtime Research | Completed (PASS) | [PHASE_15.md](docs/PHASE_REPORTS/PHASE_15.md) |
+| Phase 16 | Native iOS Verification Handoff and Reports | Completed (PASS) | [PHASE_16.md](docs/PHASE_REPORTS/PHASE_16.md) |
+| Phase 17 | Windows Packaging and Developer Documentation | Completed (PASS) | [PHASE_17.md](docs/PHASE_REPORTS/PHASE_17.md) |
+| Phase 18 | Real Application Pilot and Version 0.1 Release | Completed (PASS) | [PHASE_18.md](docs/PHASE_REPORTS/PHASE_18.md) |
 
 ---
 
