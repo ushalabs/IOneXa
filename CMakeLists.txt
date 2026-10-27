@@ -28,6 +28,8 @@ add_library(ionexa_core STATIC
     src/engines/runtime_engine.hpp
     src/process/process_supervisor.hpp
     src/process/process_supervisor.cpp
+    src/project/project_scanner.hpp
+    src/project/project_scanner.cpp
 )
 
 target_include_directories(ionexa_core PUBLIC
@@ -75,6 +77,7 @@ add_executable(ionexa_unit_tests
     tests/unit/test_structured_logger.hpp
     tests/unit/test_task_coordinator.hpp
     tests/unit/test_app_settings.hpp
+    tests/unit/test_project_scanner.hpp
     tests/unit/main.cpp
 )
 
@@ -83,7 +86,11 @@ target_link_libraries(ionexa_unit_tests PRIVATE
     Qt6::Test
 )
 
+target_compile_definitions(ionexa_unit_tests PRIVATE
+    PROJECT_ROOT_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
 add_test(NAME UnitTests COMMAND ionexa_unit_tests)
 set_tests_properties(UnitTests PROPERTIES
-    ENVIRONMENT "PATH=C:/Qt/6.8.2/msvc2022_64/bin;$ENV{PATH}"
+    ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:C:/Qt/6.8.2/msvc2022_64/bin"
 )

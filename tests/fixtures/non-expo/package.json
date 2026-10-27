@@ -1,0 +1,9 @@
+{
+  "name": "non-expo-app",
+  "version": "1.0.0",
+  "description": "A plain Node.js utility without Expo or React Native",
+  "main": "index.js",
+  "dependencies": {
+    "express": "^4.19.0"
+  }
+}

@@ -8,6 +8,7 @@
 #include "test_structured_logger.hpp"
 #include "test_task_coordinator.hpp"
 #include "test_app_settings.hpp"
+#include "test_project_scanner.hpp"
 
 int main(int argc, char* argv[]) {
     QCoreApplication app(argc, argv);
@@ -37,10 +38,14 @@ int main(int argc, char* argv[]) {
         TestAppSettings tc;
         status |= QTest::qExec(&tc, argc, argv);
     }
+    {
+        TestProjectScanner tc;
+        status |= QTest::qExec(&tc, argc, argv);
+    }
 
     if (status == 0) {
         std::cout << "\n============================================\n";
-        std::cout << "ALL 6 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
+        std::cout << "ALL 7 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
         std::cout << "============================================\n";
     }
 

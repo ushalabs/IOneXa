@@ -1,0 +1,8 @@
+{
+  "name": "malformed-app",
+  "version": "1.0.0",
+  "dependencies": {
+    "expo": "~52.0.0",,
+    BROKEN_JSON
+  }
+}
