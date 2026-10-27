@@ -151,6 +151,31 @@ bool ProcessSupervisor::start(const std::wstring& applicationPath,
         }).detach();
     }
 
+    // Read stderr in background thread
+    if (onLog && m_stderrRead) {
+        HANDLE hErr = m_stderrRead;
+        std::thread([hErr, onLog]() {
+            char buffer[1024];
+            DWORD bytesRead = 0;
+            std::string line;
+            while (ReadFile(hErr, buffer, sizeof(buffer) - 1, &bytesRead, nullptr) && bytesRead > 0) {
+                buffer[bytesRead] = '\0';
+                for (DWORD i = 0; i < bytesRead; ++i) {
+                    if (buffer[i] == '\n') {
+                        if (!line.empty() && line.back() == '\r') line.pop_back();
+                        onLog(line, true);
+                        line.clear();
+                    } else {
+                        line += buffer[i];
+                    }
+                }
+            }
+            if (!line.empty()) {
+                onLog(line, true);
+            }
+        }).detach();
+    }
+
     // Wait for exit in background thread
     if (onExit && m_processHandle) {
         HANDLE hProc = m_processHandle;

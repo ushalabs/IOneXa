@@ -28,6 +28,8 @@ add_library(ionexa_core STATIC
     src/engines/runtime_engine.hpp
     src/process/process_supervisor.hpp
     src/process/process_supervisor.cpp
+    src/process/metro_supervisor.hpp
+    src/process/metro_supervisor.cpp
     src/project/project_scanner.hpp
     src/project/project_scanner.cpp
 )
@@ -39,6 +41,7 @@ target_include_directories(ionexa_core PUBLIC
 
 target_link_libraries(ionexa_core PUBLIC
     Qt6::Core
+    Qt6::Network
     advapi32.lib
 )
 
@@ -78,6 +81,7 @@ add_executable(ionexa_unit_tests
     tests/unit/test_task_coordinator.hpp
     tests/unit/test_app_settings.hpp
     tests/unit/test_project_scanner.hpp
+    tests/unit/test_metro_supervisor.hpp
     tests/unit/main.cpp
 )
 
