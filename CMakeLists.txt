@@ -46,6 +46,8 @@ add_library(ionexa_core STATIC
     src/project/handoff_generator.cpp
     src/ui/nav_rail.hpp
     src/ui/nav_rail.cpp
+    src/ui/theme.hpp
+    src/ui/theme.cpp
     src/ui/inspector_panel.hpp
     src/ui/inspector_panel.cpp
     src/ui/viewport_manager.hpp
@@ -119,6 +121,7 @@ add_executable(ionexa_unit_tests
     tests/unit/test_regression_suite.hpp
     tests/unit/test_hardening_stress.hpp
     tests/unit/test_handoff_generator.hpp
+    tests/unit/test_gui_architecture.hpp
     tests/unit/main.cpp
 )
 
