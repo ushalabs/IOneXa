@@ -21,6 +21,7 @@ void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QS
 #include "test_fast_refresh.hpp"
 #include "test_viewport_presets.hpp"
 #include "test_developer_console.hpp"
+#include "test_network_inspector.hpp"
 
 int main(int argc, char* argv[]) {
     qInstallMessageHandler(myMessageOutput);
@@ -81,10 +82,14 @@ int main(int argc, char* argv[]) {
         TestDeveloperConsole tc;
         status |= QTest::qExec(&tc, argc, argv);
     }
+    {
+        TestNetworkInspector tc;
+        status |= QTest::qExec(&tc, argc, argv);
+    }
 
     if (status == 0) {
         std::cout << "\n============================================\n";
-        std::cout << "ALL 13 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
+        std::cout << "ALL 14 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
         std::cout << "============================================\n";
     }
 

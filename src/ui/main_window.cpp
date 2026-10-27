@@ -22,7 +22,8 @@ MainWindow::MainWindow(QWidget* parent)
     , m_stateMachine(std::make_unique<core::SessionStateMachine>())
     , m_metroSupervisor(std::make_unique<process::MetroSupervisor>(this))
     , m_hmrBridge(std::make_unique<engines::FastRefreshBridge>(this))
-    , m_viewportManager(std::make_unique<ViewportManager>(this)) {
+    , m_viewportManager(std::make_unique<ViewportManager>(this))
+    , m_networkInspector(std::make_unique<engines::NetworkInspector>(this)) {
     
     m_stateMachine->setOnStateChanged([this](core::SessionState oldState, core::SessionState newState) {
         QMetaObject::invokeMethod(this, [this, oldState, newState]() {
@@ -332,16 +333,87 @@ void MainWindow::setupUi() {
                     m_developerConsole->appendLog(ConsoleLogLevel::Error, ConsoleLogSource::Browser,
                         QString("Uncaught Exception: %1 (%2:%3)").arg(errMsg).arg(file).arg(line));
                 }
+            } else if (type == "network_start" && m_networkInspector) {
+                QString reqId = obj.value("reqId").toString();
+                QString url = obj.value("url").toString();
+                QString method = obj.value("method").toString();
+                QMap<QString, QString> headers;
+                if (obj.contains("headers") && obj["headers"].isObject()) {
+                    QJsonObject hObj = obj["headers"].toObject();
+                    for (auto it = hObj.begin(); it != hObj.end(); ++it) {
+                        headers[it.key()] = it.value().toString();
+                    }
+                }
+                auto resType = engines::NetworkInspector::deduceResourceType(url);
+                qint64 id = m_networkInspector->recordRequestStart(url, method, resType, headers);
+                m_pendingNetworkRequests[reqId] = id;
+            } else if (type == "network_response" && m_networkInspector) {
+                QString reqId = obj.value("reqId").toString();
+                qint64 id = m_pendingNetworkRequests.take(reqId);
+                int status = obj.value("status").toInt();
+                QString statusText = obj.value("statusText").toString();
+                qint64 duration = obj.value("durationMs").toInteger();
+                QMap<QString, QString> headers;
+                if (obj.contains("headers") && obj["headers"].isObject()) {
+                    QJsonObject hObj = obj["headers"].toObject();
+                    for (auto it = hObj.begin(); it != hObj.end(); ++it) {
+                        headers[it.key()] = it.value().toString();
+                    }
+                }
+                m_networkInspector->recordResponse(id, status, statusText, duration, 0, headers);
+            } else if (type == "network_error" && m_networkInspector) {
+                QString reqId = obj.value("reqId").toString();
+                qint64 id = m_pendingNetworkRequests.take(reqId);
+                qint64 duration = obj.value("durationMs").toInteger();
+                QString err = obj.value("error").toString();
+                m_networkInspector->recordFailure(id, err, duration);
             }
+        }
+    });
+
+    connect(m_webView, &engines::WebView2Widget::resourceRequested, this, [this](const QString& url, const QString& method) {
+        if (m_networkInspector) {
+            auto type = engines::NetworkInspector::deduceResourceType(url);
+            qint64 id = m_networkInspector->recordRequestStart(url, method, type);
+            m_networkInspector->recordResponse(id, 200, "OK", 8, 1024);
         }
     });
 
     canvasLayout->addWidget(m_deviceViewport);
     vSplitter->addWidget(m_canvasContainer);
 
-    // Bottom Developer Console & Runtime Diagnostics Panel
-    m_developerConsole = new DeveloperConsolePanel(vSplitter);
-    vSplitter->addWidget(m_developerConsole);
+    // Bottom Tabbed Diagnostics Panel: Console & Network Inspector
+    m_bottomTabs = new QTabWidget(vSplitter);
+    m_bottomTabs->setObjectName("bottomTabs");
+    m_bottomTabs->setStyleSheet(R"(
+        #bottomTabs::pane {
+            border: 1px solid #1e293b;
+            background-color: #020617;
+        }
+        QTabBar::tab {
+            background-color: #0f172a;
+            color: #94a3b8;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 6px 14px;
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+            margin-right: 2px;
+        }
+        QTabBar::tab:selected {
+            background-color: #1e293b;
+            color: #38bdf8;
+            border-bottom: 2px solid #38bdf8;
+        }
+    )");
+
+    m_developerConsole = new DeveloperConsolePanel(m_bottomTabs);
+    m_networkPanel = new NetworkInspectorPanel(m_networkInspector.get(), m_bottomTabs);
+
+    m_bottomTabs->addTab(m_developerConsole, "Console & Diagnostics");
+    m_bottomTabs->addTab(m_networkPanel, "Network Inspector");
+
+    vSplitter->addWidget(m_bottomTabs);
     vSplitter->setSizes({550, 250});
 
     middleLayout->addWidget(vSplitter);

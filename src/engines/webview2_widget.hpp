@@ -40,6 +40,7 @@ signals:
     void rendererCrashed(int reason);
     void consoleMessageReceived(const QString& message, int level);
     void webMessageReceived(const QString& message);
+    void resourceRequested(const QString& url, const QString& method);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;
@@ -56,6 +57,7 @@ private:
     EventRegistrationToken m_navCompletedToken{};
     EventRegistrationToken m_processFailedToken{};
     EventRegistrationToken m_webMessageReceivedToken{};
+    EventRegistrationToken m_resourceRequestedToken{};
 #endif
 
     bool m_initialized{false};

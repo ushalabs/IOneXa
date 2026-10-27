@@ -26,6 +26,7 @@ WebView2Widget::~WebView2Widget() {
         if (m_navCompletedToken.value) m_webview->remove_NavigationCompleted(m_navCompletedToken);
         if (m_processFailedToken.value) m_webview->remove_ProcessFailed(m_processFailedToken);
         if (m_webMessageReceivedToken.value) m_webview->remove_WebMessageReceived(m_webMessageReceivedToken);
+        if (m_resourceRequestedToken.value) m_webview->remove_WebResourceRequested(m_resourceRequestedToken);
     }
     if (m_controller) {
         m_controller->Close();
@@ -164,6 +165,28 @@ void WebView2Widget::initWebView() {
                                 &m_webMessageReceivedToken
                             );
 
+                            // Intercept HTTP web resource requests
+                            m_webview->AddWebResourceRequestedFilter(L"*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
+                            m_webview->add_WebResourceRequested(
+                                Callback<ICoreWebView2WebResourceRequestedEventHandler>(
+                                    [this](ICoreWebView2*, ICoreWebView2WebResourceRequestedEventArgs* args) -> HRESULT {
+                                        ICoreWebView2WebResourceRequest* req = nullptr;
+                                        if (SUCCEEDED(args->get_Request(&req)) && req) {
+                                            LPWSTR uriRaw = nullptr;
+                                            LPWSTR methodRaw = nullptr;
+                                            req->get_Uri(&uriRaw);
+                                            req->get_Method(&methodRaw);
+                                            QString uri = QString::fromWCharArray(uriRaw);
+                                            QString method = QString::fromWCharArray(methodRaw);
+                                            CoTaskMemFree(uriRaw);
+                                            CoTaskMemFree(methodRaw);
+                                            emit resourceRequested(uri, method);
+                                        }
+                                        return S_OK;
+                                    }).Get(),
+                                &m_resourceRequestedToken
+                            );
+
                             // Inject IOneXa client runtime bridge script
                             const wchar_t* bridgeScript = LR"(
 (function() {
@@ -234,6 +257,68 @@ void WebView2Widget::initWebView() {
     console.warn = function() { _warn.apply(console, arguments); sendConsole('warning', arguments); };
     console.error = function() { _err.apply(console, arguments); sendConsole('error', arguments); };
     console.debug = function() { _dbg.apply(console, arguments); sendConsole('debug', arguments); };
+
+    // Hook fetch() for API and network inspection
+    var _fetch = window.fetch;
+    if (_fetch) {
+        window.fetch = function(url, options) {
+            var startTime = Date.now();
+            var method = (options && options.method) ? options.method : 'GET';
+            var headers = {};
+            if (options && options.headers) {
+                try {
+                    if (options.headers.forEach) {
+                        options.headers.forEach(function(val, key) { headers[key] = val; });
+                    } else {
+                        headers = options.headers;
+                    }
+                } catch(e) {}
+            }
+            var reqId = 'req_' + Math.random().toString(36).substr(2, 9);
+            if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage(JSON.stringify({
+                    type: 'network_start',
+                    reqId: reqId,
+                    url: String(url),
+                    method: method,
+                    headers: headers
+                }));
+            }
+
+            return _fetch.apply(this, arguments).then(function(response) {
+                var duration = Date.now() - startTime;
+                var resHeaders = {};
+                if (response.headers && response.headers.forEach) {
+                    response.headers.forEach(function(v, k) { resHeaders[k] = v; });
+                }
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage(JSON.stringify({
+                        type: 'network_response',
+                        reqId: reqId,
+                        url: String(url),
+                        method: method,
+                        status: response.status,
+                        statusText: response.statusText,
+                        durationMs: duration,
+                        headers: resHeaders
+                    }));
+                }
+                return response;
+            }).catch(function(err) {
+                var duration = Date.now() - startTime;
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage(JSON.stringify({
+                        type: 'network_error',
+                        reqId: reqId,
+                        url: String(url),
+                        durationMs: duration,
+                        error: err ? err.message : 'Network error'
+                    }));
+                }
+                throw err;
+            });
+        };
+    }
 })();
 )";
                             m_webview->AddScriptToExecuteOnDocumentCreated(

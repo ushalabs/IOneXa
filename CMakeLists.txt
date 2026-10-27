@@ -30,6 +30,8 @@ add_library(ionexa_core STATIC
     src/engines/webview2_widget.cpp
     src/engines/fast_refresh_bridge.hpp
     src/engines/fast_refresh_bridge.cpp
+    src/engines/network_inspector.hpp
+    src/engines/network_inspector.cpp
     src/process/process_supervisor.hpp
     src/process/process_supervisor.cpp
     src/process/metro_supervisor.hpp
@@ -44,6 +46,8 @@ add_library(ionexa_core STATIC
     src/ui/viewport_manager.cpp
     src/ui/developer_console_panel.hpp
     src/ui/developer_console_panel.cpp
+    src/ui/network_inspector_panel.hpp
+    src/ui/network_inspector_panel.cpp
 )
 
 target_include_directories(ionexa_core PUBLIC
@@ -103,6 +107,7 @@ add_executable(ionexa_unit_tests
     tests/unit/test_fast_refresh.hpp
     tests/unit/test_viewport_presets.hpp
     tests/unit/test_developer_console.hpp
+    tests/unit/test_network_inspector.hpp
     tests/unit/main.cpp
 )
 

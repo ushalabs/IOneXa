@@ -17,6 +17,8 @@
 #include "inspector_panel.hpp"
 #include "viewport_manager.hpp"
 #include "developer_console_panel.hpp"
+#include "network_inspector_panel.hpp"
+#include "engines/network_inspector.hpp"
 
 namespace ionexa::ui {
 
@@ -50,7 +52,9 @@ private:
     std::unique_ptr<process::MetroSupervisor> m_metroSupervisor;
     std::unique_ptr<engines::FastRefreshBridge> m_hmrBridge;
     std::unique_ptr<ViewportManager> m_viewportManager;
+    std::unique_ptr<engines::NetworkInspector> m_networkInspector;
     project::ProjectDetails m_currentProject;
+    QMap<QString, qint64> m_pendingNetworkRequests;
 
     // UI elements
     NavRail* m_navRail{nullptr};
@@ -73,7 +77,9 @@ private:
     QFrame* m_homeIndicator{nullptr};
     engines::WebView2Widget* m_webView{nullptr};
     QLabel* m_placeholderLabel{nullptr};
+    QTabWidget* m_bottomTabs{nullptr};
     DeveloperConsolePanel* m_developerConsole{nullptr};
+    NetworkInspectorPanel* m_networkPanel{nullptr};
     QProgressBar* m_progressBar{nullptr};
 };
 
