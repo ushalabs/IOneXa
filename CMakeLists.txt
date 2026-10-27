@@ -26,6 +26,8 @@ add_library(ionexa_core STATIC
     src/core/app_settings.hpp
     src/core/app_settings.cpp
     src/engines/runtime_engine.hpp
+    src/engines/webview2_widget.hpp
+    src/engines/webview2_widget.cpp
     src/process/process_supervisor.hpp
     src/process/process_supervisor.cpp
     src/process/metro_supervisor.hpp
@@ -41,8 +43,12 @@ target_include_directories(ionexa_core PUBLIC
 
 target_link_libraries(ionexa_core PUBLIC
     Qt6::Core
+    Qt6::Widgets
     Qt6::Network
     advapi32.lib
+    user32.lib
+    ole32.lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/webview2/lib/x64/WebView2LoaderStatic.lib
 )
 
 # Main Application Executable
@@ -82,12 +88,14 @@ add_executable(ionexa_unit_tests
     tests/unit/test_app_settings.hpp
     tests/unit/test_project_scanner.hpp
     tests/unit/test_metro_supervisor.hpp
+    tests/unit/test_webview2_engine.hpp
     tests/unit/main.cpp
 )
 
 target_link_libraries(ionexa_unit_tests PRIVATE
     ionexa_core
     Qt6::Test
+    Qt6::Widgets
 )
 
 target_compile_definitions(ionexa_unit_tests PRIVATE

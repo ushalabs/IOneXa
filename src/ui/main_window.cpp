@@ -13,13 +13,22 @@ namespace ionexa::ui {
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
-    , m_stateMachine(std::make_unique<core::SessionStateMachine>()) {
+    , m_stateMachine(std::make_unique<core::SessionStateMachine>())
+    , m_metroSupervisor(std::make_unique<process::MetroSupervisor>(this)) {
     
     m_stateMachine->setOnStateChanged([this](core::SessionState oldState, core::SessionState newState) {
-        // Safe dispatch to Qt thread
         QMetaObject::invokeMethod(this, [this, oldState, newState]() {
             updateSessionState(oldState, newState);
         });
+    });
+
+    connect(m_metroSupervisor.get(), &process::MetroSupervisor::ready, this, &MainWindow::onMetroReady);
+    connect(m_metroSupervisor.get(), &process::MetroSupervisor::logOutput, this, &MainWindow::appendLog);
+    connect(m_metroSupervisor.get(), &process::MetroSupervisor::processTerminated, this, [this](int exitCode) {
+        appendLog(QString("[Supervisor] Process exited with code %1").arg(exitCode));
+        if (m_stateMachine->canTransitionTo(core::SessionState::Stopped)) {
+            m_stateMachine->transitionTo(core::SessionState::Stopped);
+        }
     });
 
     setupUi();
@@ -116,12 +125,29 @@ void MainWindow::setupUi() {
     m_deviceViewport->setFixedSize(m_deviceWidth, m_deviceHeight);
 
     auto* viewportInnerLayout = new QVBoxLayout(m_deviceViewport);
-    viewportInnerLayout->setAlignment(Qt::AlignCenter);
+    viewportInnerLayout->setContentsMargins(12, 12, 12, 12);
+    viewportInnerLayout->setSpacing(0);
 
-    auto* placeholderLabel = new QLabel("No Project Loaded\nClick 'Open Project' to select an Expo directory", m_deviceViewport);
-    placeholderLabel->setAlignment(Qt::AlignCenter);
-    placeholderLabel->setObjectName("placeholderLabel");
-    viewportInnerLayout->addWidget(placeholderLabel);
+    m_placeholderLabel = new QLabel("No Project Loaded\nClick 'Open Project' to select an Expo directory", m_deviceViewport);
+    m_placeholderLabel->setAlignment(Qt::AlignCenter);
+    m_placeholderLabel->setObjectName("placeholderLabel");
+    viewportInnerLayout->addWidget(m_placeholderLabel);
+
+    m_webView = new engines::WebView2Widget(m_deviceViewport);
+    m_webView->hide();
+    viewportInnerLayout->addWidget(m_webView);
+
+    connect(m_webView, &engines::WebView2Widget::navigationCompleted, this, [this](bool success, int errorCode) {
+        if (success) {
+            appendLog("[Renderer] Navigation completed successfully.");
+        } else {
+            appendLog(QString("[Renderer] Navigation failed with error status: %1").arg(errorCode), true);
+        }
+    });
+
+    connect(m_webView, &engines::WebView2Widget::rendererCrashed, this, [this](int reason) {
+        appendLog(QString("[Renderer] CRITICAL: WebView2 renderer process crashed (reason=%1)").arg(reason), true);
+    });
 
     canvasLayout->addWidget(m_deviceViewport);
     vSplitter->addWidget(m_canvasContainer);
@@ -278,27 +304,72 @@ void MainWindow::onOpenProjectClicked() {
     if (!dir.isEmpty()) {
         appendLog(QString("[Project] Selected directory: %1").arg(dir));
         m_stateMachine->transitionTo(core::SessionState::Inspecting);
-        // Simulate inspection completion
+        
+        m_currentProject = project::ProjectScanner::scan(dir.toStdString());
+        if (!m_currentProject.isValid) {
+            appendLog(QString("[Project] Error: %1").arg(QString::fromStdString(m_currentProject.errorMessage)), true);
+            m_stateMachine->transitionTo(core::SessionState::Error);
+            return;
+        }
+
+        if (!m_currentProject.isExpoProject) {
+            appendLog("[Project] Notice: Directory is not an Expo project.", true);
+            m_stateMachine->transitionTo(core::SessionState::Error);
+            return;
+        }
+
+        appendLog(QString("[Project] Loaded '%1' (Expo SDK: %2, Manager: %3)")
+                  .arg(QString::fromStdString(m_currentProject.projectName))
+                  .arg(QString::fromStdString(m_currentProject.expoSdkVersion))
+                  .arg(QString::fromStdString(m_currentProject.packageManager)));
+
+        if (!m_currentProject.hasWebSupport) {
+            appendLog(QString("[Project] Warning: Missing web packages. Run '%1'")
+                      .arg(QString::fromStdString(m_currentProject.remediationCommand)), true);
+        }
+
         m_stateMachine->transitionTo(core::SessionState::Ready);
     }
 }
 
 void MainWindow::onStartClicked() {
+    if (!m_currentProject.isValid || !m_currentProject.isExpoProject) {
+        appendLog("[Supervisor] Cannot start: No valid Expo project selected.", true);
+        return;
+    }
+
     if (m_stateMachine->canTransitionTo(core::SessionState::Starting)) {
         m_stateMachine->transitionTo(core::SessionState::Starting);
-        m_stateMachine->transitionTo(core::SessionState::Running);
+        m_metroSupervisor->start(m_currentProject);
     }
 }
 
 void MainWindow::onStopClicked() {
     if (m_stateMachine->canTransitionTo(core::SessionState::Stopping)) {
         m_stateMachine->transitionTo(core::SessionState::Stopping);
+        m_metroSupervisor->stop();
         m_stateMachine->transitionTo(core::SessionState::Stopped);
     }
 }
 
 void MainWindow::onReloadClicked() {
     appendLog("[Engine] Reload requested.");
+    if (m_webView) {
+        m_webView->reload();
+    }
+}
+
+void MainWindow::onMetroReady(const QString& url, int port) {
+    Q_UNUSED(port);
+    appendLog(QString("[Engine] Metro dev server confirmed ready at %1").arg(url));
+    if (m_placeholderLabel) m_placeholderLabel->hide();
+    if (m_webView) {
+        m_webView->show();
+        m_webView->navigate(url);
+    }
+    if (m_stateMachine->canTransitionTo(core::SessionState::Running)) {
+        m_stateMachine->transitionTo(core::SessionState::Running);
+    }
 }
 
 void MainWindow::onDevicePresetChanged(int index) {

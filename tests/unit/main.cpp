@@ -1,4 +1,4 @@
-#include <QCoreApplication>
+#include <QApplication>
 #include <QTest>
 #include <iostream>
 
@@ -16,10 +16,11 @@ void myMessageOutput(QtMsgType type, const QMessageLogContext &context, const QS
 #include "test_app_settings.hpp"
 #include "test_project_scanner.hpp"
 #include "test_metro_supervisor.hpp"
+#include "test_webview2_engine.hpp"
 
 int main(int argc, char* argv[]) {
     qInstallMessageHandler(myMessageOutput);
-    QCoreApplication app(argc, argv);
+    QApplication app(argc, argv);
     int status = 0;
 
     {
@@ -56,10 +57,14 @@ int main(int argc, char* argv[]) {
         if (res != 0) std::cerr << "TestMetroSupervisor FAILED with code " << res << std::endl;
         status |= res;
     }
+    {
+        TestWebView2Engine tc;
+        status |= QTest::qExec(&tc, argc, argv);
+    }
 
     if (status == 0) {
         std::cout << "\n============================================\n";
-        std::cout << "ALL 8 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
+        std::cout << "ALL 9 IONEXA UNIT TEST SUITES PASSED (100%)!\n";
         std::cout << "============================================\n";
     }
 
