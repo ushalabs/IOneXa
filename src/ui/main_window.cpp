@@ -8,6 +8,10 @@
 #include <QMenuBar>
 #include <QToolBar>
 #include <QFrame>
+#include <QClipboard>
+#include <QApplication>
+#include <QShortcut>
+#include <QKeySequence>
 
 namespace ionexa::ui {
 
@@ -22,6 +26,12 @@ MainWindow::MainWindow(QWidget* parent)
         });
     });
 
+    connect(m_metroSupervisor.get(), &process::MetroSupervisor::statusChanged, this, [this](process::MetroStatus status) {
+        if (m_inspectorPanel) {
+            m_inspectorPanel->updateProcess(m_metroSupervisor->processId(), m_metroSupervisor->activePort(), status);
+        }
+    });
+
     connect(m_metroSupervisor.get(), &process::MetroSupervisor::ready, this, &MainWindow::onMetroReady);
     connect(m_metroSupervisor.get(), &process::MetroSupervisor::logOutput, this, &MainWindow::appendLog);
     connect(m_metroSupervisor.get(), &process::MetroSupervisor::processTerminated, this, [this](int exitCode) {
@@ -34,35 +44,56 @@ MainWindow::MainWindow(QWidget* parent)
     setupUi();
     applyDarkTheme();
     updateSessionState(core::SessionState::Idle, core::SessionState::Idle);
+
+    // Keyboard shortcuts
+    auto* scOpen = new QShortcut(QKeySequence("Ctrl+O"), this);
+    connect(scOpen, &QShortcut::activated, this, &MainWindow::onOpenProjectClicked);
+
+    auto* scReload = new QShortcut(QKeySequence("Ctrl+R"), this);
+    connect(scReload, &QShortcut::activated, this, &MainWindow::onReloadClicked);
+
+    auto* scClear = new QShortcut(QKeySequence("Ctrl+K"), this);
+    connect(scClear, &QShortcut::activated, this, &MainWindow::onClearConsoleClicked);
 }
 
 MainWindow::~MainWindow() = default;
 
 void MainWindow::setupUi() {
     setWindowTitle("IOneXa — Mobile Development Workbench (Expo/React Native)");
-    resize(1280, 850);
+    resize(1380, 880);
 
-    // Central widget & main splitter
+    // Central widget & root layout (Horizontal: NavRail | Workspace | Inspector)
     auto* centralWidget = new QWidget(this);
     setCentralWidget(centralWidget);
 
-    auto* mainLayout = new QVBoxLayout(centralWidget);
-    mainLayout->setContentsMargins(0, 0, 0, 0);
-    mainLayout->setSpacing(0);
+    auto* rootLayout = new QHBoxLayout(centralWidget);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
+    rootLayout->setSpacing(0);
+
+    // 1. Navigation Rail (Left, 64px)
+    m_navRail = new NavRail(centralWidget);
+    rootLayout->addWidget(m_navRail);
+
+    // 2. Middle Container (Toolbar + Canvas + Console)
+    auto* middleContainer = new QWidget(centralWidget);
+    auto* middleLayout = new QVBoxLayout(middleContainer);
+    middleLayout->setContentsMargins(0, 0, 0, 0);
+    middleLayout->setSpacing(0);
 
     // Top Header / Toolbar Bar
-    auto* topHeader = new QWidget(this);
+    auto* topHeader = new QWidget(middleContainer);
     topHeader->setObjectName("topHeader");
     topHeader->setFixedHeight(50);
     auto* headerLayout = new QHBoxLayout(topHeader);
     headerLayout->setContentsMargins(16, 0, 16, 0);
-    headerLayout->setSpacing(12);
+    headerLayout->setSpacing(10);
 
     m_btnOpen = new QPushButton("Open Project", topHeader);
     m_btnOpen->setObjectName("btnOpen");
+    m_btnOpen->setToolTip("Open Expo project folder (Ctrl+O)");
     connect(m_btnOpen, &QPushButton::clicked, this, &MainWindow::onOpenProjectClicked);
 
-    m_btnStart = new QPushButton("▶ Start Preview", topHeader);
+    m_btnStart = new QPushButton("▶ Start", topHeader);
     m_btnStart->setObjectName("btnStart");
     connect(m_btnStart, &QPushButton::clicked, this, &MainWindow::onStartClicked);
 
@@ -72,13 +103,14 @@ void MainWindow::setupUi() {
 
     m_btnReload = new QPushButton("🔄 Reload", topHeader);
     m_btnReload->setObjectName("btnReload");
+    m_btnReload->setToolTip("Reload web view (Ctrl+R)");
     connect(m_btnReload, &QPushButton::clicked, this, &MainWindow::onReloadClicked);
 
     headerLayout->addWidget(m_btnOpen);
     headerLayout->addWidget(m_btnStart);
     headerLayout->addWidget(m_btnStop);
     headerLayout->addWidget(m_btnReload);
-    headerLayout->addSpacing(16);
+    headerLayout->addSpacing(10);
 
     // Device preset selector
     m_deviceCombo = new QComboBox(topHeader);
@@ -91,9 +123,22 @@ void MainWindow::setupUi() {
     m_btnOrientation = new QPushButton("🔄 Rotate", topHeader);
     connect(m_btnOrientation, &QPushButton::clicked, this, &MainWindow::onToggleOrientationClicked);
 
+    // Zoom selector
+    m_zoomCombo = new QComboBox(topHeader);
+    m_zoomCombo->addItem("100%", 100);
+    m_zoomCombo->addItem("75%", 75);
+    m_zoomCombo->addItem("125%", 125);
+    m_zoomCombo->addItem("150%", 150);
+    connect(m_zoomCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        int zoomPercent = m_zoomCombo->itemData(idx).toInt();
+        onZoomChanged(zoomPercent);
+    });
+
     headerLayout->addWidget(new QLabel("Device:", topHeader));
     headerLayout->addWidget(m_deviceCombo);
     headerLayout->addWidget(m_btnOrientation);
+    headerLayout->addWidget(new QLabel("Zoom:", topHeader));
+    headerLayout->addWidget(m_zoomCombo);
 
     headerLayout->addStretch();
 
@@ -107,10 +152,10 @@ void MainWindow::setupUi() {
     m_statusBadge->setObjectName("statusBadge");
     headerLayout->addWidget(m_statusBadge);
 
-    mainLayout->addWidget(topHeader);
+    middleLayout->addWidget(topHeader);
 
     // Vertical Splitter for Canvas + Bottom Diagnostics
-    auto* vSplitter = new QSplitter(Qt::Vertical, centralWidget);
+    auto* vSplitter = new QSplitter(Qt::Vertical, middleContainer);
     vSplitter->setContentsMargins(0, 0, 0, 0);
 
     // Canvas Center Area
@@ -156,11 +201,26 @@ void MainWindow::setupUi() {
     auto* consoleContainer = new QWidget(vSplitter);
     consoleContainer->setObjectName("consoleContainer");
     auto* consoleLayout = new QVBoxLayout(consoleContainer);
-    consoleLayout->setContentsMargins(12, 8, 12, 8);
+    consoleLayout->setContentsMargins(12, 6, 12, 6);
 
-    auto* consoleHeader = new QLabel("Terminal & Runtime Diagnostics", consoleContainer);
+    auto* consoleTopBar = new QHBoxLayout();
+    auto* consoleHeader = new QLabel("TERMINAL & RUNTIME DIAGNOSTICS", consoleContainer);
     consoleHeader->setObjectName("consoleHeader");
-    consoleLayout->addWidget(consoleHeader);
+
+    m_btnCopyDiagnostics = new QPushButton("Copy Diagnostics", consoleContainer);
+    m_btnCopyDiagnostics->setFixedHeight(26);
+    connect(m_btnCopyDiagnostics, &QPushButton::clicked, this, &MainWindow::onCopyDiagnosticsClicked);
+
+    m_btnClearConsole = new QPushButton("Clear (Ctrl+K)", consoleContainer);
+    m_btnClearConsole->setFixedHeight(26);
+    connect(m_btnClearConsole, &QPushButton::clicked, this, &MainWindow::onClearConsoleClicked);
+
+    consoleTopBar->addWidget(consoleHeader);
+    consoleTopBar->addStretch();
+    consoleTopBar->addWidget(m_btnCopyDiagnostics);
+    consoleTopBar->addWidget(m_btnClearConsole);
+
+    consoleLayout->addLayout(consoleTopBar);
 
     m_consoleOutput = new QTextEdit(consoleContainer);
     m_consoleOutput->setReadOnly(true);
@@ -170,7 +230,12 @@ void MainWindow::setupUi() {
     vSplitter->addWidget(consoleContainer);
     vSplitter->setSizes({600, 200});
 
-    mainLayout->addWidget(vSplitter);
+    middleLayout->addWidget(vSplitter);
+    rootLayout->addWidget(middleContainer, 1);
+
+    // 3. Right Inspector Panel (280px)
+    m_inspectorPanel = new InspectorPanel(centralWidget);
+    rootLayout->addWidget(m_inspectorPanel);
 
     statusBar()->showMessage("IOneXa Ready — Visual Studio 2022 / Qt 6.8 / Edge WebView2");
 }
@@ -299,6 +364,32 @@ void MainWindow::appendLog(const QString& line, bool isStderr) {
     }
 }
 
+void MainWindow::onZoomChanged(int zoomPercent) {
+    m_currentZoom = zoomPercent / 100.0;
+    if (m_webView) {
+        m_webView->setZoomFactor(m_currentZoom);
+    }
+    if (m_inspectorPanel) {
+        int w = m_isLandscape ? m_deviceHeight : m_deviceWidth;
+        int h = m_isLandscape ? m_deviceWidth : m_deviceHeight;
+        m_inspectorPanel->updateViewport(w, h, m_isLandscape, m_currentZoom);
+    }
+    appendLog(QString("[Viewport] Zoom level adjusted to %1%").arg(zoomPercent));
+}
+
+void MainWindow::onCopyDiagnosticsClicked() {
+    QString diagnostics = m_consoleOutput->toPlainText();
+    QClipboard* clipboard = QApplication::clipboard();
+    clipboard->setText(diagnostics);
+    statusBar()->showMessage("Diagnostics copied to clipboard!", 3000);
+    appendLog("[Diagnostics] Full log buffer copied to system clipboard.");
+}
+
+void MainWindow::onClearConsoleClicked() {
+    m_consoleOutput->clear();
+    statusBar()->showMessage("Console cleared.", 2000);
+}
+
 void MainWindow::onOpenProjectClicked() {
     QString dir = QFileDialog::getExistingDirectory(this, "Select Expo Project Directory");
     if (!dir.isEmpty()) {
@@ -306,6 +397,10 @@ void MainWindow::onOpenProjectClicked() {
         m_stateMachine->transitionTo(core::SessionState::Inspecting);
         
         m_currentProject = project::ProjectScanner::scan(dir.toStdString());
+        if (m_inspectorPanel) {
+            m_inspectorPanel->updateProject(m_currentProject);
+        }
+
         if (!m_currentProject.isValid) {
             appendLog(QString("[Project] Error: %1").arg(QString::fromStdString(m_currentProject.errorMessage)), true);
             m_stateMachine->transitionTo(core::SessionState::Error);
@@ -384,6 +479,9 @@ void MainWindow::onDevicePresetChanged(int index) {
     int w = m_isLandscape ? m_deviceHeight : m_deviceWidth;
     int h = m_isLandscape ? m_deviceWidth : m_deviceHeight;
     m_deviceViewport->setFixedSize(w, h);
+    if (m_inspectorPanel) {
+        m_inspectorPanel->updateViewport(w, h, m_isLandscape, m_currentZoom);
+    }
     appendLog(QString("[Viewport] Resized to %1 x %2").arg(w).arg(h));
 }
 
@@ -392,6 +490,9 @@ void MainWindow::onToggleOrientationClicked() {
     int w = m_isLandscape ? m_deviceHeight : m_deviceWidth;
     int h = m_isLandscape ? m_deviceWidth : m_deviceHeight;
     m_deviceViewport->setFixedSize(w, h);
+    if (m_inspectorPanel) {
+        m_inspectorPanel->updateViewport(w, h, m_isLandscape, m_currentZoom);
+    }
     appendLog(QString("[Viewport] Orientation toggled: %1 (%2 x %3)")
               .arg(m_isLandscape ? "Landscape" : "Portrait").arg(w).arg(h));
 }

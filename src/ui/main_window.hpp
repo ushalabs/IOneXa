@@ -12,6 +12,8 @@
 #include "project/project_scanner.hpp"
 #include "process/metro_supervisor.hpp"
 #include "engines/webview2_widget.hpp"
+#include "nav_rail.hpp"
+#include "inspector_panel.hpp"
 
 namespace ionexa::ui {
 
@@ -32,6 +34,9 @@ private slots:
     void onReloadClicked();
     void onDevicePresetChanged(int index);
     void onToggleOrientationClicked();
+    void onZoomChanged(int zoomPercent);
+    void onCopyDiagnosticsClicked();
+    void onClearConsoleClicked();
     void onMetroReady(const QString& url, int port);
 
 private:
@@ -43,6 +48,8 @@ private:
     project::ProjectDetails m_currentProject;
 
     // UI elements
+    NavRail* m_navRail{nullptr};
+    InspectorPanel* m_inspectorPanel{nullptr};
     QLabel* m_statusBadge{nullptr};
     QLabel* m_truthDisclosureLabel{nullptr};
     QPushButton* m_btnOpen{nullptr};
@@ -51,6 +58,9 @@ private:
     QPushButton* m_btnReload{nullptr};
     QComboBox* m_deviceCombo{nullptr};
     QPushButton* m_btnOrientation{nullptr};
+    QComboBox* m_zoomCombo{nullptr};
+    QPushButton* m_btnCopyDiagnostics{nullptr};
+    QPushButton* m_btnClearConsole{nullptr};
     QWidget* m_canvasContainer{nullptr};
     QWidget* m_deviceViewport{nullptr};
     engines::WebView2Widget* m_webView{nullptr};
@@ -59,6 +69,7 @@ private:
     QProgressBar* m_progressBar{nullptr};
 
     bool m_isLandscape{false};
+    double m_currentZoom{1.0};
     int m_deviceWidth{390};
     int m_deviceHeight{844};
 };

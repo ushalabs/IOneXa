@@ -34,6 +34,10 @@ add_library(ionexa_core STATIC
     src/process/metro_supervisor.cpp
     src/project/project_scanner.hpp
     src/project/project_scanner.cpp
+    src/ui/nav_rail.hpp
+    src/ui/nav_rail.cpp
+    src/ui/inspector_panel.hpp
+    src/ui/inspector_panel.cpp
 )
 
 target_include_directories(ionexa_core PUBLIC
@@ -89,6 +93,7 @@ add_executable(ionexa_unit_tests
     tests/unit/test_project_scanner.hpp
     tests/unit/test_metro_supervisor.hpp
     tests/unit/test_webview2_engine.hpp
+    tests/unit/test_ui_components.hpp
     tests/unit/main.cpp
 )
 
