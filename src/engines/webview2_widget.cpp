@@ -448,6 +448,19 @@ void WebView2Widget::applyDeviceEmulation(int width, int height, double scaleFac
 #endif
 }
 
+void WebView2Widget::reparentTo(QWidget* newParent) {
+    setParent(newParent);
+#ifdef _WIN32
+    if (m_controller) {
+        HWND hWnd = reinterpret_cast<HWND>(winId());
+        m_controller->put_ParentWindow(hWnd);
+        updateBounds();
+        m_controller->put_IsVisible(TRUE);
+    }
+#endif
+    show();
+}
+
 bool WebView2Widget::isInitialized() const {
     return m_initialized;
 }

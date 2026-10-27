@@ -18,6 +18,7 @@
 #include "viewport_manager.hpp"
 #include "developer_console_panel.hpp"
 #include "network_inspector_panel.hpp"
+#include "device_emulator_window.hpp"
 #include "engines/network_inspector.hpp"
 
 namespace ionexa::ui {
@@ -43,6 +44,9 @@ private slots:
     void onCopyDiagnosticsClicked();
     void onClearConsoleClicked();
     void onMetroReady(const QString& url, int port);
+    void openEmulatorWindow();
+    void dockEmulator();
+    void undockEmulator();
 
 private:
     void setupUi();
@@ -65,6 +69,7 @@ private:
     QPushButton* m_btnStart{nullptr};
     QPushButton* m_btnStop{nullptr};
     QPushButton* m_btnReload{nullptr};
+    QPushButton* m_btnEmulator{nullptr};
     QComboBox* m_deviceCombo{nullptr};
     QPushButton* m_btnOrientation{nullptr};
     QPushButton* m_btnTouch{nullptr};
@@ -81,6 +86,7 @@ private:
     DeveloperConsolePanel* m_developerConsole{nullptr};
     NetworkInspectorPanel* m_networkPanel{nullptr};
     QProgressBar* m_progressBar{nullptr};
+    DeviceEmulatorWindow* m_emulatorWindow{nullptr};
 };
 
 } // namespace ionexa::ui

@@ -29,6 +29,7 @@ public:
     void postWebMessageAsJson(const QString& json);
     void addScriptToExecuteOnDocumentCreated(const QString& script);
     void applyDeviceEmulation(int width, int height, double scaleFactor, bool touchEnabled, const QString& userAgent = "");
+    void reparentTo(QWidget* newParent);
 
     [[nodiscard]] bool isInitialized() const;
     [[nodiscard]] QString currentUrl() const;

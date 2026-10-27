@@ -125,6 +125,18 @@ MainWindow::MainWindow(QWidget* parent)
         }
     });
 
+    m_emulatorWindow = new DeviceEmulatorWindow(m_viewportManager.get(), nullptr);
+    connect(m_emulatorWindow, &DeviceEmulatorWindow::consoleRequested, this, [this]() {
+        if (m_bottomTabs && m_developerConsole) {
+            m_bottomTabs->setCurrentWidget(m_developerConsole);
+            activateWindow();
+            raise();
+        }
+    });
+    connect(m_emulatorWindow, &DeviceEmulatorWindow::reloadRequested, this, &MainWindow::onReloadClicked);
+    connect(m_emulatorWindow, &DeviceEmulatorWindow::dockRequested, this, &MainWindow::dockEmulator);
+    connect(m_emulatorWindow, &DeviceEmulatorWindow::undockRequested, this, &MainWindow::undockEmulator);
+
     setupUi();
     applyDarkTheme();
     updateSessionState(core::SessionState::Idle, core::SessionState::Idle);
@@ -138,9 +150,18 @@ MainWindow::MainWindow(QWidget* parent)
 
     auto* scClear = new QShortcut(QKeySequence("Ctrl+K"), this);
     connect(scClear, &QShortcut::activated, this, &MainWindow::onClearConsoleClicked);
+
+    auto* scEmulator = new QShortcut(QKeySequence("Ctrl+Shift+E"), this);
+    connect(scEmulator, &QShortcut::activated, this, &MainWindow::openEmulatorWindow);
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow() {
+    if (m_emulatorWindow) {
+        m_emulatorWindow->saveSettings();
+        delete m_emulatorWindow;
+        m_emulatorWindow = nullptr;
+    }
+}
 
 void MainWindow::setupUi() {
     setWindowTitle("IOneXa — Mobile Development Workbench (Expo/React Native)");
@@ -190,10 +211,16 @@ void MainWindow::setupUi() {
     m_btnReload->setToolTip("Reload web view (Ctrl+R)");
     connect(m_btnReload, &QPushButton::clicked, this, &MainWindow::onReloadClicked);
 
+    m_btnEmulator = new QPushButton("📱 Emulator", topHeader);
+    m_btnEmulator->setObjectName("btnEmulator");
+    m_btnEmulator->setToolTip("Open Standalone Mobile Device Emulator Window (Ctrl+Shift+E)");
+    connect(m_btnEmulator, &QPushButton::clicked, this, &MainWindow::openEmulatorWindow);
+
     headerLayout->addWidget(m_btnOpen);
     headerLayout->addWidget(m_btnStart);
     headerLayout->addWidget(m_btnStop);
     headerLayout->addWidget(m_btnReload);
+    headerLayout->addWidget(m_btnEmulator);
     headerLayout->addSpacing(10);
 
     // Device preset selector
@@ -653,6 +680,9 @@ void MainWindow::onStopClicked() {
         }
         m_metroSupervisor->stop();
         m_stateMachine->transitionTo(core::SessionState::Stopped);
+        if (m_emulatorWindow) {
+            m_emulatorWindow->showPlaceholder(true, "Session Stopped\nClick ▶ Start to relaunch Expo preview");
+        }
     }
 }
 
@@ -662,6 +692,9 @@ void MainWindow::onReloadClicked() {
         m_hmrBridge->requestManualReload(false);
     } else if (m_webView) {
         m_webView->reload();
+    }
+    if (m_emulatorWindow) {
+        m_emulatorWindow->reload();
     }
 }
 
@@ -676,9 +709,45 @@ void MainWindow::onMetroReady(const QString& url, int port) {
         m_webView->show();
         m_webView->navigate(url);
     }
+    if (m_emulatorWindow) {
+        m_emulatorWindow->navigate(url);
+        m_emulatorWindow->show();
+        m_emulatorWindow->raise();
+    }
     if (m_stateMachine->canTransitionTo(core::SessionState::Running)) {
         m_stateMachine->transitionTo(core::SessionState::Running);
     }
+}
+
+void MainWindow::openEmulatorWindow() {
+    if (m_emulatorWindow) {
+        m_emulatorWindow->show();
+        m_emulatorWindow->raise();
+        m_emulatorWindow->activateWindow();
+        appendLog("[Workbench] Mobile Device Emulator window brought to front.");
+    }
+}
+
+void MainWindow::dockEmulator() {
+    if (!m_emulatorWindow) return;
+    m_emulatorWindow->hide();
+    m_emulatorWindow->setDocked(true);
+    if (m_deviceViewport) {
+        m_deviceViewport->show();
+    }
+    appendLog("[Layout] Device emulator docked into Workbench.");
+}
+
+void MainWindow::undockEmulator() {
+    if (!m_emulatorWindow) return;
+    if (m_deviceViewport) {
+        m_deviceViewport->hide();
+    }
+    m_emulatorWindow->setDocked(false);
+    m_emulatorWindow->show();
+    m_emulatorWindow->raise();
+    m_emulatorWindow->activateWindow();
+    appendLog("[Layout] Device emulator running in standalone window.");
 }
 
 void MainWindow::onDevicePresetChanged(int index) {
