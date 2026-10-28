@@ -34,41 +34,52 @@ In strict compliance with the Master Engineering Prompt:
   - `eas simulator:stop`: Graceful teardown of owned remote sessions.
 
 ### B. Live Entitlement & Authentication Probe
-Command executed in isolated fixture directory (`tests/fixtures/native-ios-fixture`):
+Command executed in linked project directory (`tests/fixtures/native-ios-fixture`):
 ```powershell
 eas simulator:availability --json --non-interactive
 ```
 
 **Observed Output:**
-```text
-An Expo user account is required to proceed.
-Either log in with eas login or set the EXPO_TOKEN environment variable if you're using EAS CLI on CI (Learn more: https://docs.expo.dev/accounts/programmatic-access/)
-    Error: simulator:availability command failed.
+```json
+{
+  "available": false,
+  "accountName": "ushalabs",
+  "waitlistUrl": "https://expo.dev/services/simulators"
+}
 ```
 
-**Status:** **BLOCKED BY AUTHENTICATION**  
-- The local environment has no active Expo session (`state.json` expired/unauthenticated; no `EXPO_TOKEN` environment variable).
-- Actual early-access entitlement cannot be queried until the owner logs in (`eas login`) or exports an `EXPO_TOKEN`.
-
-### C. Build Provider Feasibility (EAS Build)
-Command executed in isolated fixture directory:
+**Live Start Probe:**
 ```powershell
-eas build --platform ios --profile ionexa-ios-simulator --non-interactive --json
+eas simulator:start --platform ios --build-id a11bfe74-62d0-469c-99a9-d51bed598118 --json --non-interactive
 ```
 
 **Observed Output:**
 ```text
-An Expo user account is required to proceed.
-Either log in with eas login or set the EXPO_TOKEN environment variable if you're using EAS CLI on CI (Learn more: https://docs.expo.dev/accounts/programmatic-access/)
-    Error: build command failed.
+EAS Simulator isn't available on ushalabs yet — it's coming soon.
+Join the waitlist to get access: https://expo.dev/services/simulators
+    Error: simulator command failed.
 ```
 
-**Required Prerequisites for Native Build:**
-1. Active Expo account authentication (`eas login` or `EXPO_TOKEN`).
-2. EAS project association (`eas init` writing `expo.extra.eas.projectId`).
-3. Registered `ios.bundleIdentifier` in `app.json` (configured in fixture as `com.ushalabs.ionexa.fixture`).
-4. An `eas.json` profile with `"ios": { "simulator": true }` (configured in fixture).
-5. Compilation occurs on remote Apple macOS workers provided by EAS.
+**Status:** **PROVED WAITLISTED / BRANCH B ACTIVATED**  
+- The account `ushalabs` is authenticated but currently waitlisted for EAS Simulator early access.
+- In accordance with Decision Tree Branch B, EAS Simulator is documented as waitlisted, and Appetize is activated as Provider B for native simulator execution.
+
+### C. Build Provider Verification (EAS Build Succeeded)
+Command executed in linked fixture directory:
+```powershell
+eas build --platform ios --profile ionexa-ios-simulator --non-interactive --json
+```
+
+**Observed Result:**
+- **Build ID:** `a11bfe74-62d0-469c-99a9-d51bed598118`
+- **Status:** `FINISHED`
+- **Platform:** `IOS`
+- **Target:** `iOS Simulator` (`isForIosSimulator: true`)
+- **Xcode Build Duration:** 326.5 seconds (executed on Apple macOS remote worker)
+- **Artifact URL:** `https://expo.dev/artifacts/eas/yyJ3kw9f0ilnUrNAJ5DxLb2fsGqybqXh34MMHWfSDMo.tar.gz`
+- **Local Download:** `tests/fixtures/native-ios-fixture/dist/ionexa-native-ios-fixture.tar.gz` (9.79 MB)
+- **Extracted Native Mach-O Binary:** `IOneXaNativeiOSVerificationFixture.app/IOneXaNativeiOSVerificationFixture` (24.1 MB native Mach-O executable)
+- **Packaged for Appetize:** `tests/fixtures/native-ios-fixture/dist/ionexa-native-ios-fixture.zip` (9.64 MB)
 
 **Pricing Gate:**
 - EAS Build Free Tier: Includes 30 builds/month across iOS and Android on standard priority queues.

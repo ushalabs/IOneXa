@@ -10,7 +10,7 @@
 | Phase | Title | Status | Gate Requirement | Verification Summary | Commit SHA |
 |---|---|---|---|---|---|
 | **Phase 19** | **Native iOS Architecture Audit and Execution Decision** | **COMPLETED** | Audit names exact false assumptions, provider candidates, and feasible minimum native simulator proof | Comprehensive baseline audit completed; ADR 0003 established; C++20 interface contracts defined; `.gitignore` secured. | `9911a3f` |
-| **Phase 20** | **Real iOS Simulator Provider and Build Feasibility** | **COMPLETED** | At least one real provider demonstrably available or documented as BLOCKED | EAS CLI 26.0.0 verified; EAS Simulator blocked by auth; Appetize API verified reachable; fixture created. | Pending Commit |
+| **Phase 20** | **Real iOS Simulator Provider and Build Feasibility** | **COMPLETED** | At least one real provider demonstrably available or documented as BLOCKED | Authenticated as ushalabs; EAS Build a11bfe74 produced real .app artifact; EAS Simulator proved waitlisted; Appetize provider activated. | `95cc9d3` |
 | **Phase 21** | **Verified Native Expo iOS Simulator Execution** | PENDING | Native iOS execution actually observed on real simulator | Mandatory stop-and-show milestone for owner inspection. | — |
 | **Phase 22** | **Native Build and Simulator Session Integration** | PENDING | Real session triggered/observed/ended by IOneXa | Requires Phase 21 owner approval. | — |
 | **Phase 23** | **Authentic iOS Simulator Viewing and Interaction** | PENDING | Real native simulator pixels and input observed | Replaces Expo Web viewer. | — |
