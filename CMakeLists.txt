@@ -28,6 +28,7 @@ add_library(ionexa_core STATIC
     src/core/security_policy.hpp
     src/core/security_policy.cpp
     src/engines/runtime_engine.hpp
+    src/engines/simulator_provider_interface.hpp
     src/engines/webview2_widget.hpp
     src/engines/webview2_widget.cpp
     src/engines/fast_refresh_bridge.hpp
