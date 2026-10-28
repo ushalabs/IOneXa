@@ -1,0 +1,21 @@
+{
+  "cli": {
+    "version": ">= 26.0.0"
+  },
+  "build": {
+    "ionexa-ios-simulator": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "ionexa-ios-devclient": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    }
+  }
+}
