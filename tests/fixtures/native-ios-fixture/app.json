@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "IOneXa Native iOS Verification Fixture",
+    "slug": "ionexa-native-ios-fixture",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ushalabs.ionexa.fixture",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "76f5f454-007d-4807-b01c-41cbe4b15865"
+      }
+    },
+    "owner": "ushalabs"
+  }
+}

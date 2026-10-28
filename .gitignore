@@ -57,3 +57,9 @@ yarn-error.log*
 .env
 .env.local
 .env.*.local
+.env.eas-simulator*
+*.token
+*.token.json
+eas-credentials.json
+.eas/
+
